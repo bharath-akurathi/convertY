@@ -164,6 +164,7 @@ describe('useConverter hook', () => {
     exec: ReturnType<typeof vi.fn>;
     writeFile: ReturnType<typeof vi.fn>;
     readFile: ReturnType<typeof vi.fn>;
+    deleteFile: ReturnType<typeof vi.fn>;
     terminate: ReturnType<typeof vi.fn>;
   };
   let execReject: ((reason: Error) => void) | null = null;
@@ -180,6 +181,7 @@ describe('useConverter hook', () => {
       exec: vi.fn(() => Promise.resolve(0)),
       writeFile: vi.fn(() => Promise.resolve(true)),
       readFile: vi.fn(() => Promise.resolve(new Uint8Array([4, 5, 6]))),
+      deleteFile: vi.fn(() => Promise.resolve(true)),
       terminate: vi.fn(() => {
         mockFFmpeg.loaded = false;
         execReject?.(new Error('terminated'));

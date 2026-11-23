@@ -85,8 +85,8 @@ ZIP only — 7z/TAR/RAR conversion is out of scope (no in-browser archiver).
 Clone the repository:
 
 ```sh
-git clone https://github.com/remarkablemark/file-converter.git
-cd file-converter
+git clone https://github.com/bharath-akurathi/convertY.git
+cd convertY
 ```
 
 Install the dependencies:
@@ -161,6 +161,18 @@ offline once loaded, except the first AVIF/JPEG/WebP encoder download).
 2. Framework preset: **Vite**.
 3. Build command: `npm run build`; output directory: `dist/`.
 4. Deploy — no extra configuration is needed.
+
+## Architecture
+
+![convertY client-side architecture](docs/architecture.png)
+
+convertY is 100% client-side. The diagram above shows how it fits together:
+
+- **User interface** — React 19 UI with five tools: Convert, Compress, Edit, Documents, and Archives.
+- **Hooks / application logic** — `useConverter`, `useFFmpeg`, and `useBatchConverter` coordinate processing, progress, batch work, and cancellation.
+- **Processing / services** — FFmpeg.wasm for media conversion, Canvas + @jsquash for image compression and editing, pdf-lib / pdf.js / jsPDF / mammoth / docx for documents, and fflate for ZIP archives. Everything runs locally in the browser; no file is ever uploaded.
+- **Browser platform** — Blob URLs for previews and downloads, ImageBitmap for image work, and the FFmpeg virtual filesystem for temporary files.
+- **Outputs** — converted media, compressed and edited images, PDFs and documents, and ZIP archives, all delivered as browser downloads.
 
 ## Attribution
 

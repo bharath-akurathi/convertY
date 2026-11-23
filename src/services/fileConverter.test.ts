@@ -65,6 +65,43 @@ describe('convertFile', () => {
     );
   });
 
+  it('forces the custom filename extension to match the output format', async () => {
+    const engine = createEngine();
+    const file = new File([], 'clip.mp4', { type: 'video/mp4' });
+
+    const result = await convertFile(
+      engine,
+      file,
+      'webm',
+      'video',
+      options,
+      'my clip!.avi',
+    );
+
+    expect(result.filename).toBe('my_clip_.webm');
+    expect(engine.convert).toHaveBeenCalledWith(
+      file,
+      'my_clip_.webm',
+      expect.any(Array),
+    );
+  });
+
+  it('adds the output extension when the custom name has none', async () => {
+    const engine = createEngine();
+    const file = new File([], 'photo.png', { type: 'image/png' });
+
+    const result = await convertFile(
+      engine,
+      file,
+      'jpg',
+      'image',
+      options,
+      'my photo',
+    );
+
+    expect(result.filename).toBe('my_photo.jpg');
+  });
+
   it('falls back to a default filename when the name is empty', async () => {
     const engine = createEngine();
     const file = new File([], 'photo.png', { type: 'image/png' });

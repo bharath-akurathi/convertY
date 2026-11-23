@@ -10,6 +10,7 @@ import {
   getCompressorExtension,
   getCompressorMimeType,
   scaleDimensions,
+  scaleImageData,
 } from './imageCompressor';
 
 vi.mock('@jsquash/jpeg', () => ({
@@ -31,7 +32,15 @@ vi.mock('@jsquash/avif', () => ({
 }));
 
 vi.mock('@jsquash/png', () => ({
-  encode: vi.fn(() => Promise.resolve(new Uint8Array(400).buffer)),
+  // PNG ignores quality; the encoded size grows with the pixel count so
+  // dimension reduction actually shrinks the output.
+  encode: vi.fn((imageData: ImageData) =>
+    Promise.resolve(
+      new Uint8Array(
+        Math.max(1, Math.round((imageData.width * imageData.height) / 1200)),
+      ).buffer,
+    ),
+  ),
 }));
 
 const mockedJpeg = vi.mocked(encodeJpeg);
@@ -72,6 +81,7 @@ describe('imageCompressor', () => {
         height: 0,
         getContext: () => ({
           drawImage: vi.fn(),
+          putImageData: vi.fn(),
           getImageData: (_x: number, _y: number, w: number, h: number) =>
             createFakeImageData(w, h),
         }),
@@ -180,12 +190,23 @@ describe('imageCompressor', () => {
     ).rejects.toThrow('Canvas 2D context is not available');
   });
 
+  it('scales decoded image data by a factor', () => {
+    const imageData = createFakeImageData(800, 600);
+    const scaled = scaleImageData(imageData, 0.5);
+
+    expect(scaled.width).toBe(400);
+    expect(scaled.height).toBe(300);
+    expect(scaled.imageData.width).toBe(400);
+    expect(scaled.imageData.height).toBe(300);
+  });
+
   it('binary-searches quality to hit a target size', async () => {
     const file = new File(['x'], 'photo.png', { type: 'image/png' });
     const result = await compressToTargetSize(file, 'jpeg', 600);
 
     expect(result.blob.size).toBeLessThanOrEqual(600);
     expect(result.quality).toBe(60);
+    expect(result.targetMet).toBe(true);
   });
 
   it('falls back to quality 1 when even the lowest quality is too large', async () => {
@@ -194,5 +215,29 @@ describe('imageCompressor', () => {
 
     expect(result.quality).toBe(1);
     expect(result.blob.size).toBe(10);
+    expect(result.targetMet).toBe(false);
+  });
+
+  it('shrinks PNG dimensions to hit a target size', async () => {
+    const file = new File(['x'], 'photo.png', { type: 'image/png' });
+    const result = await compressToTargetSize(file, 'png', 350);
+
+    // Full-size PNG is 400 bytes; at 0.9 scale (720x540) it is 324 bytes.
+    expect(result.targetMet).toBe(true);
+    expect(result.blob.size).toBeLessThanOrEqual(350);
+    expect(result.width).toBe(720);
+    expect(result.height).toBe(540);
+    expect(result.quality).toBe(1);
+  });
+
+  it('reports when a PNG target size cannot be met', async () => {
+    const file = new File(['x'], 'photo.png', { type: 'image/png' });
+    const result = await compressToTargetSize(file, 'png', 3);
+
+    // Even the smallest scale (80x60) is 4 bytes, over the 3-byte target.
+    expect(result.targetMet).toBe(false);
+    expect(result.blob.size).toBe(4);
+    expect(result.width).toBe(80);
+    expect(result.height).toBe(60);
   });
 });

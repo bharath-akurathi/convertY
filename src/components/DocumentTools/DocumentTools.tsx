@@ -46,11 +46,12 @@ const OPERATION_DESCRIPTIONS: Record<Operation, string> = {
   'pdf-to-text': 'PDF to text — extract the text of every page.',
   'compress-pdf':
     'Compress PDF (structural only) — re-saves the PDF with object streams. This only shrinks structure and metadata; it does not recompress embedded images.',
-  'text-to-pdf': 'Text to PDF — convert a .txt, .md, or .html file into a PDF.',
+  'text-to-pdf':
+    'Text to PDF — convert a .txt, .md, or .html file into a PDF. Markdown and HTML are converted as plain text; formatting is not rendered.',
   'docx-to-text':
     'DOCX to text — extract text and HTML from a Word document. Full-fidelity DOCX to PDF conversion is out of scope.',
   'text-to-docx':
-    'Text to DOCX — convert a .txt or .md file into a Word document.',
+    'Text to DOCX — convert a .txt or .md file into a Word document. Markdown is converted as plain text; formatting is not rendered.',
 };
 
 const MULTI_FILE_OPERATIONS: Operation[] = ['merge', 'images-to-pdf'];

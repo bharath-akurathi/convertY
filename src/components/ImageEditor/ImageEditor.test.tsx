@@ -1,4 +1,10 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import { applyEdits } from '../../services/imageEditor';
@@ -26,8 +32,8 @@ vi.mock('../../utils/download', async (importOriginal) => {
 const mockedApplyEdits = vi.mocked(applyEdits);
 const mockedDownloadBlob = vi.mocked(downloadBlob);
 
-function createFakeBitmap(): ImageBitmap {
-  return { width: 800, height: 600, close: vi.fn() };
+function createFakeBitmap(width = 800, height = 600): ImageBitmap {
+  return { width, height, close: vi.fn() };
 }
 
 describe('ImageEditor', () => {
@@ -160,21 +166,72 @@ describe('ImageEditor', () => {
     await selectFile(user);
 
     const container = previewContainer();
-    fireEvent.mouseDown(container, { clientX: 100, clientY: 100 });
-    fireEvent.mouseMove(container, { clientX: 300, clientY: 250 });
-    fireEvent.mouseUp(container);
+    fireEvent.pointerDown(container, {
+      pointerId: 1,
+      clientX: 100,
+      clientY: 100,
+    });
+    fireEvent.pointerMove(container, {
+      pointerId: 1,
+      clientX: 300,
+      clientY: 250,
+    });
+    fireEvent.pointerUp(container, { pointerId: 1 });
 
     expect(screen.getByText(/crop: 100, 100, 200×150/i)).toBeInTheDocument();
   });
 
-  it('ignores mouse moves and mouse ups without a drag', async () => {
+  it('captures the pointer when starting a crop drag', async () => {
     const user = userEvent.setup();
     render(<ImageEditor />);
     await selectFile(user);
 
     const container = previewContainer();
-    fireEvent.mouseMove(container, { clientX: 300, clientY: 250 });
-    fireEvent.mouseUp(container);
+    const setPointerCapture = vi.fn();
+    container.setPointerCapture = setPointerCapture;
+
+    fireEvent.pointerDown(container, {
+      pointerId: 7,
+      clientX: 100,
+      clientY: 100,
+    });
+
+    expect(setPointerCapture).toHaveBeenCalledWith(7);
+  });
+
+  it('cancels a crop drag on pointer cancel', async () => {
+    const user = userEvent.setup();
+    render(<ImageEditor />);
+    await selectFile(user);
+
+    const container = previewContainer();
+    fireEvent.pointerDown(container, {
+      pointerId: 1,
+      clientX: 100,
+      clientY: 100,
+    });
+    fireEvent.pointerMove(container, {
+      pointerId: 1,
+      clientX: 300,
+      clientY: 250,
+    });
+    fireEvent.pointerCancel(container, { pointerId: 1 });
+
+    expect(screen.queryByText(/crop:/i)).not.toBeInTheDocument();
+  });
+
+  it('ignores pointer moves and pointer ups without a drag', async () => {
+    const user = userEvent.setup();
+    render(<ImageEditor />);
+    await selectFile(user);
+
+    const container = previewContainer();
+    fireEvent.pointerMove(container, {
+      pointerId: 1,
+      clientX: 300,
+      clientY: 250,
+    });
+    fireEvent.pointerUp(container, { pointerId: 1 });
 
     expect(screen.queryByText(/crop:/i)).not.toBeInTheDocument();
   });
@@ -185,8 +242,12 @@ describe('ImageEditor', () => {
     await selectFile(user);
 
     const container = previewContainer();
-    fireEvent.mouseDown(container, { clientX: 100, clientY: 100 });
-    fireEvent.mouseUp(container);
+    fireEvent.pointerDown(container, {
+      pointerId: 1,
+      clientX: 100,
+      clientY: 100,
+    });
+    fireEvent.pointerUp(container, { pointerId: 1 });
 
     expect(screen.queryByText(/crop:/i)).not.toBeInTheDocument();
   });
@@ -197,9 +258,17 @@ describe('ImageEditor', () => {
     await selectFile(user);
 
     const container = previewContainer();
-    fireEvent.mouseDown(container, { clientX: 100, clientY: 100 });
-    fireEvent.mouseMove(container, { clientX: 300, clientY: 250 });
-    fireEvent.mouseUp(container);
+    fireEvent.pointerDown(container, {
+      pointerId: 1,
+      clientX: 100,
+      clientY: 100,
+    });
+    fireEvent.pointerMove(container, {
+      pointerId: 1,
+      clientX: 300,
+      clientY: 250,
+    });
+    fireEvent.pointerUp(container, { pointerId: 1 });
 
     await user.click(screen.getByRole('button', { name: /clear crop/i }));
     expect(screen.queryByText(/crop:/i)).not.toBeInTheDocument();
@@ -279,6 +348,136 @@ describe('ImageEditor', () => {
       expect.any(Blob),
       'photo-edited.webp',
     );
+  });
+
+  it('downloads with the format used at export, not the current selector', async () => {
+    const user = userEvent.setup();
+    render(<ImageEditor />);
+    await selectFile(user);
+
+    // Default export format is JPEG.
+    await user.click(screen.getByRole('button', { name: /^export$/i }));
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('button', { name: /download edited image/i }),
+      ).toBeInTheDocument();
+    });
+
+    // Change the selector after exporting; the download must still be JPEG.
+    await user.selectOptions(screen.getByLabelText(/export format/i), 'png');
+    await user.click(
+      screen.getByRole('button', { name: /download edited image/i }),
+    );
+    expect(mockedDownloadBlob).toHaveBeenCalledWith(
+      expect.any(Blob),
+      'photo-edited.jpg',
+    );
+  });
+
+  it('ignores a stale image decode when a newer file was selected', async () => {
+    const user = userEvent.setup();
+    let resolveFirstDecode!: (bitmap: ImageBitmap) => void;
+    const firstDecode = new Promise<ImageBitmap>((resolve) => {
+      resolveFirstDecode = resolve;
+    });
+    vi.mocked(createImageBitmap)
+      .mockImplementationOnce(() => firstDecode)
+      .mockImplementationOnce(() =>
+        Promise.resolve(createFakeBitmap(400, 300)),
+      );
+
+    render(<ImageEditor />);
+
+    const input = getFileInput();
+    const first = new File(['x'], 'first.png', { type: 'image/png' });
+    await user.upload(input, [first]);
+
+    const second = new File(['y'], 'second.png', { type: 'image/png' });
+    await user.upload(input, [second]);
+
+    await waitFor(() => {
+      expect(screen.getByAltText(/image to edit/i)).toBeInTheDocument();
+    });
+
+    // The first decode finishes late; it must not replace the second image.
+    resolveFirstDecode(createFakeBitmap(800, 600));
+    await waitFor(() => {
+      expect(screen.getByText('second.png')).toBeInTheDocument();
+    });
+
+    // Crop math uses the second (400x300) bitmap, not the stale 800x600 one.
+    const container = previewContainer();
+    fireEvent.pointerDown(container, {
+      pointerId: 1,
+      clientX: 100,
+      clientY: 100,
+    });
+    fireEvent.pointerMove(container, {
+      pointerId: 1,
+      clientX: 300,
+      clientY: 250,
+    });
+    fireEvent.pointerUp(container, { pointerId: 1 });
+
+    expect(screen.getByText(/crop: 50, 50, 100×75/i)).toBeInTheDocument();
+  });
+
+  it('ignores a stale image decode error when a newer file was selected', async () => {
+    const user = userEvent.setup();
+    let rejectFirstDecode!: (reason: Error) => void;
+    const firstDecode = new Promise<ImageBitmap>((_resolve, reject) => {
+      rejectFirstDecode = reject;
+    });
+    vi.mocked(createImageBitmap)
+      .mockImplementationOnce(() => firstDecode)
+      .mockImplementationOnce(() =>
+        Promise.resolve(createFakeBitmap(400, 300)),
+      );
+
+    render(<ImageEditor />);
+
+    const input = getFileInput();
+    const first = new File(['x'], 'first.png', { type: 'image/png' });
+    await user.upload(input, [first]);
+
+    const second = new File(['y'], 'second.png', { type: 'image/png' });
+    await user.upload(input, [second]);
+
+    await waitFor(() => {
+      expect(screen.getByAltText(/image to edit/i)).toBeInTheDocument();
+    });
+
+    // The first decode fails late; the error must be ignored (no alert).
+    rejectFirstDecode(new Error('bad image'));
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    });
+
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.getByText('second.png')).toBeInTheDocument();
+  });
+
+  it('releases preview URLs and the bitmap on unmount', async () => {
+    const user = userEvent.setup();
+    const revoke = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {
+      // jsdom revoke is a no-op for these assertions
+    });
+    const { unmount } = render(<ImageEditor />);
+    await selectFile(user);
+
+    await user.click(screen.getByRole('button', { name: /^export$/i }));
+    await waitFor(() => {
+      expect(
+        screen.getByRole('button', { name: /download edited image/i }),
+      ).toBeInTheDocument();
+    });
+
+    const callsBeforeUnmount = revoke.mock.calls.length;
+    unmount();
+    expect(revoke.mock.calls.length).toBeGreaterThan(callsBeforeUnmount);
+
+    revoke.mockRestore();
   });
 
   it('shows an error when export fails', async () => {

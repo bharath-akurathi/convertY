@@ -11,9 +11,29 @@ export function FileConverter() {
   const converter = useConverter();
   const [downloaded, setDownloaded] = useState(false);
   const [batchMode, setBatchMode] = useState(false);
+  const [sampleError, setSampleError] = useState<string | null>(null);
 
   const isBusy =
     converter.status === 'loading' || converter.status === 'converting';
+
+  async function handleSampleFile() {
+    setSampleError(null);
+
+    try {
+      const response = await fetch(`${import.meta.env.BASE_URL}sample.png`);
+
+      if (!response.ok) {
+        throw new Error('Sample file could not be loaded');
+      }
+
+      const blob = await response.blob();
+      converter.setFile(new File([blob], 'sample.png', { type: 'image/png' }));
+    } catch {
+      setSampleError(
+        'Could not load the sample file. Please upload your own file instead.',
+      );
+    }
+  }
 
   function handleDownload() {
     converter.download();
@@ -76,6 +96,29 @@ export function FileConverter() {
       ) : (
         <>
           <FileDropzone disabled={isBusy} onFileSelect={converter.setFile} />
+
+          <p className="text-sm text-slate-600 dark:text-slate-400">
+            No file handy?{' '}
+            <button
+              className="cursor-pointer font-medium text-blue-600 underline hover:text-blue-500 disabled:cursor-not-allowed disabled:opacity-50 dark:text-blue-400"
+              disabled={isBusy}
+              onClick={() => {
+                void handleSampleFile();
+              }}
+              type="button"
+            >
+              Try a sample image
+            </button>
+          </p>
+
+          {sampleError && (
+            <p
+              className="rounded-md bg-red-50 p-3 text-sm text-red-700 dark:bg-red-900/30 dark:text-red-200"
+              role="alert"
+            >
+              {sampleError}
+            </p>
+          )}
 
           {converter.file && (
             <div className="rounded-md bg-white p-4 shadow-xs dark:bg-slate-800">

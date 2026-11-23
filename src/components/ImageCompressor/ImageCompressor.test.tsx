@@ -67,7 +67,10 @@ async function selectFile(user: ReturnType<typeof userEvent.setup>) {
 describe('ImageCompressor', () => {
   beforeEach(() => {
     mockedCompressImage.mockResolvedValue(createResult());
-    mockedCompressToTargetSize.mockResolvedValue(createResult({ quality: 55 }));
+    mockedCompressToTargetSize.mockResolvedValue({
+      ...createResult({ quality: 55 }),
+      targetMet: true,
+    });
   });
 
   afterEach(() => {
@@ -151,6 +154,56 @@ describe('ImageCompressor', () => {
 
     await user.click(screen.getByLabelText(/^quality$/i));
     expect(screen.getByLabelText(/quality:/i)).toBeInTheDocument();
+  });
+
+  it('warns when the target size could not be reached', async () => {
+    const user = userEvent.setup();
+    mockedCompressToTargetSize.mockResolvedValueOnce({
+      ...createResult({ quality: 1 }),
+      targetMet: false,
+    });
+    render(<ImageCompressor />);
+
+    await selectFile(user);
+
+    await user.click(screen.getByLabelText(/target size$/i));
+    await user.clear(screen.getByLabelText(/target size \(kb\)/i));
+    await user.type(screen.getByLabelText(/target size \(kb\)/i), '10');
+
+    await user.click(screen.getByRole('button', { name: /^compress$/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/could not reach 10 kb/i)).toBeInTheDocument();
+    });
+  });
+
+  it('revokes preview URLs when files are replaced and on unmount', async () => {
+    const user = userEvent.setup();
+    const revoke = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {
+      // jsdom revoke is a no-op for these assertions
+    });
+    const { unmount } = render(<ImageCompressor />);
+
+    await selectFile(user);
+    await user.click(screen.getByRole('button', { name: /^compress$/i }));
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('button', { name: /download compressed image/i }),
+      ).toBeInTheDocument();
+    });
+
+    // Selecting a new file releases the previous input and result URLs.
+    const callsBeforeReplace = revoke.mock.calls.length;
+    await selectFile(user);
+    expect(revoke.mock.calls.length).toBeGreaterThan(callsBeforeReplace);
+
+    // Unmounting releases the current URLs.
+    const callsBeforeUnmount = revoke.mock.calls.length;
+    unmount();
+    expect(revoke.mock.calls.length).toBeGreaterThan(callsBeforeUnmount);
+
+    revoke.mockRestore();
   });
 
   it('shows a generic error for non-Error failures', async () => {

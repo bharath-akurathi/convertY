@@ -1,4 +1,10 @@
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import { useConverter } from '../../hooks/useConverter';
@@ -287,6 +293,80 @@ describe('FileConverter component', () => {
 
     await user.click(screen.getByRole('button', { name: /convert$/i }));
     expect(convert).toHaveBeenCalled();
+  });
+
+  it('loads the sample image when the sample button is clicked', async () => {
+    const user = userEvent.setup();
+    const setFile = vi.fn();
+    vi.mocked(useConverter).mockReturnValue(createMockConverter({ setFile }));
+    const fetchMock = vi.fn(() =>
+      Promise.resolve(
+        new Response(new Blob(['fake-png'], { type: 'image/png' }), {
+          status: 200,
+        }),
+      ),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<FileConverter />);
+
+    await user.click(
+      screen.getByRole('button', { name: /try a sample image/i }),
+    );
+
+    await waitFor(() => {
+      expect(setFile).toHaveBeenCalled();
+    });
+    const passedFile = setFile.mock.calls[0][0] as File;
+    expect(passedFile).toBeInstanceOf(File);
+    expect(passedFile.name).toBe('sample.png');
+    expect(passedFile.type).toBe('image/png');
+
+    vi.unstubAllGlobals();
+  });
+
+  it('shows an error when the sample image fails to load', async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => Promise.reject(new Error('network down'))),
+    );
+
+    render(<FileConverter />);
+
+    await user.click(
+      screen.getByRole('button', { name: /try a sample image/i }),
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole('alert')).toHaveTextContent(
+        /could not load the sample file/i,
+      );
+    });
+
+    vi.unstubAllGlobals();
+  });
+
+  it('shows an error when the sample image request fails', async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => Promise.resolve(new Response(null, { status: 404 }))),
+    );
+
+    render(<FileConverter />);
+
+    await user.click(
+      screen.getByRole('button', { name: /try a sample image/i }),
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole('alert')).toHaveTextContent(
+        /could not load the sample file/i,
+      );
+    });
+
+    vi.unstubAllGlobals();
   });
 
   it('does not render a preview when there is no input URL', () => {

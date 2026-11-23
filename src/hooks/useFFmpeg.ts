@@ -30,6 +30,9 @@ export interface UseFFmpegResult {
 export function useFFmpeg(): UseFFmpegResult {
   const ffmpegRef = useRef<FFmpeg | null>(null);
   const loadErrorRef = useRef<string | null>(null);
+  // Bumped on every cancel/unmount so in-flight load/convert steps can
+  // notice they were cancelled instead of completing afterwards.
+  const cancelGenerationRef = useRef(0);
   const [status, setStatus] = useState<FFmpegStatus>('idle');
   const [loaded, setLoaded] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -49,6 +52,8 @@ export function useFFmpeg(): UseFFmpegResult {
     setError(null);
     setProgress(0);
 
+    const generation = cancelGenerationRef.current;
+
     try {
       /* v8 ignore start */
       if (
@@ -60,6 +65,9 @@ export function useFFmpeg(): UseFFmpegResult {
       /* v8 ignore stop */
 
       const ffmpeg = new FFmpeg();
+      // Store the instance before awaiting load so cancel() can terminate
+      // it while loading is still in progress.
+      ffmpegRef.current = ffmpeg;
 
       ffmpeg.on('log', ({ message }) => {
         // eslint-disable-next-line no-console
@@ -75,11 +83,25 @@ export function useFFmpeg(): UseFFmpegResult {
         wasmURL: FFMPEG_WASM_URL,
       });
 
-      ffmpegRef.current = ffmpeg;
+      if (cancelGenerationRef.current !== generation) {
+        // Cancelled while loading; do not mark the (terminated) instance
+        // as loaded.
+        return;
+      }
+
       loadErrorRef.current = null;
       setLoaded(true);
       setStatus('idle');
     } catch (err) {
+      if (cancelGenerationRef.current !== generation) {
+        // Cancelled; do not surface an error for the aborted load.
+        return;
+      }
+
+      // Drop the failed instance so a retry starts from a fresh one.
+      ffmpegRef.current?.terminate();
+      ffmpegRef.current = null;
+
       // eslint-disable-next-line no-console
       console.error('FFmpeg load failed:', err);
       /* v8 ignore start */
@@ -102,8 +124,14 @@ export function useFFmpeg(): UseFFmpegResult {
     outputName: string,
     args: string[],
   ): Promise<Uint8Array> {
+    const generation = cancelGenerationRef.current;
+
     if (!ffmpegRef.current?.loaded) {
       await load();
+    }
+
+    if (cancelGenerationRef.current !== generation) {
+      throw new Error('Conversion cancelled');
     }
 
     const ffmpeg = ffmpegRef.current;
@@ -122,10 +150,19 @@ export function useFFmpeg(): UseFFmpegResult {
 
     try {
       await ffmpeg.writeFile(inputName, await fetchFile(inputFile));
+
+      if (cancelGenerationRef.current !== generation) {
+        throw new Error('Conversion cancelled');
+      }
+
       const exitCode = await ffmpeg.exec([...args, outputName]);
 
       if (exitCode !== 0) {
         throw new Error(`FFmpeg exited with code ${String(exitCode)}`);
+      }
+
+      if (cancelGenerationRef.current !== generation) {
+        throw new Error('Conversion cancelled');
       }
 
       const data = await ffmpeg.readFile(outputName);
@@ -137,7 +174,7 @@ export function useFFmpeg(): UseFFmpegResult {
       setStatus('idle');
       return data;
     } catch (err) {
-      if (!ffmpegRef.current) {
+      if (cancelGenerationRef.current !== generation || !ffmpegRef.current) {
         setStatus('idle');
         setError(null);
         throw new Error('Conversion cancelled', { cause: err });
@@ -149,10 +186,16 @@ export function useFFmpeg(): UseFFmpegResult {
       /* v8 ignore stop */
       setError(message);
       throw new Error(message, { cause: err });
+    } finally {
+      // Best-effort cleanup of temporary files in the FFmpeg virtual
+      // filesystem so repeated conversions do not accumulate them.
+      await ffmpeg.deleteFile(inputName).catch(() => undefined);
+      await ffmpeg.deleteFile(outputName).catch(() => undefined);
     }
   }
 
   function cancel() {
+    cancelGenerationRef.current += 1;
     ffmpegRef.current?.terminate();
     ffmpegRef.current = null;
     loadErrorRef.current = null;
@@ -164,6 +207,7 @@ export function useFFmpeg(): UseFFmpegResult {
 
   useEffect(() => {
     return () => {
+      cancelGenerationRef.current += 1;
       ffmpegRef.current?.terminate();
       ffmpegRef.current = null;
     };

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import type {
   CompressedImage,
@@ -10,10 +10,12 @@ import {
   getCompressorExtension,
 } from '../../services/imageCompressor';
 import { downloadBlob, formatBytes } from '../../utils/download';
-import { createFileUrl, isLargeFile } from '../../utils/helpers';
+import { createFileUrl, isLargeFile, revokeFileUrl } from '../../utils/helpers';
 import { FileDropzone } from '../FileDropzone';
 
 type CompressMode = 'quality' | 'target';
+
+type CompressResult = CompressedImage & { targetMet?: boolean };
 
 export function ImageCompressor() {
   const [file, setFile] = useState<File | null>(null);
@@ -22,14 +24,30 @@ export function ImageCompressor() {
   const [quality, setQuality] = useState(80);
   const [mode, setMode] = useState<CompressMode>('quality');
   const [targetKb, setTargetKb] = useState(500);
-  const [result, setResult] = useState<CompressedImage | null>(null);
+  const [result, setResult] = useState<CompressResult | null>(null);
   const [resultUrl, setResultUrl] = useState<string | null>(null);
   const [isBusy, setIsBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const inputUrlRef = useRef<string | null>(null);
+  const resultUrlRef = useRef<string | null>(null);
+
+  // Release preview URLs when the component unmounts so repeated use does
+  // not leak blob URLs.
+  useEffect(() => {
+    return () => {
+      revokeFileUrl(inputUrlRef.current);
+      revokeFileUrl(resultUrlRef.current);
+    };
+  }, []);
 
   function handleFileSelect(selected: File) {
+    revokeFileUrl(inputUrlRef.current);
+    revokeFileUrl(resultUrlRef.current);
+    const url = createFileUrl(selected);
+    inputUrlRef.current = url;
+    resultUrlRef.current = null;
     setFile(selected);
-    setInputUrl(createFileUrl(selected));
+    setInputUrl(url);
     setResult(null);
     setResultUrl(null);
     setError(null);
@@ -49,8 +67,11 @@ export function ImageCompressor() {
         mode === 'target'
           ? await compressToTargetSize(file, format, targetKb * 1024)
           : await compressImage(file, { format, quality });
+      revokeFileUrl(resultUrlRef.current);
+      const url = createFileUrl(compressed.blob);
+      resultUrlRef.current = url;
       setResult(compressed);
-      setResultUrl(createFileUrl(compressed.blob));
+      setResultUrl(url);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Compression failed');
     } finally {
@@ -220,6 +241,14 @@ export function ImageCompressor() {
             {savedPercent}% smaller, {result.width}×{result.height}
             {mode === 'target' ? `, quality ${String(result.quality)}` : ''})
           </p>
+
+          {mode === 'target' && result.targetMet === false && (
+            <p className="rounded-md bg-amber-50 p-3 text-sm text-amber-700 dark:bg-amber-900/30 dark:text-amber-200">
+              Could not reach {targetKb} KB — the smallest achievable output is{' '}
+              {formatBytes(result.blob.size)}. Try a smaller target or a
+              different format.
+            </p>
+          )}
 
           <div className="grid gap-4 sm:grid-cols-2">
             {inputUrl && (

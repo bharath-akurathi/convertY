@@ -1,5 +1,5 @@
 import { FFmpeg } from '@ffmpeg/ffmpeg';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useState } from 'react';
 
@@ -21,6 +21,7 @@ interface MockFFmpeg {
   exec: ReturnType<typeof vi.fn>;
   writeFile: ReturnType<typeof vi.fn>;
   readFile: ReturnType<typeof vi.fn>;
+  deleteFile: ReturnType<typeof vi.fn>;
   terminate: ReturnType<typeof vi.fn>;
 }
 
@@ -120,6 +121,7 @@ describe('useFFmpeg hook', () => {
       }),
       writeFile: vi.fn(() => Promise.resolve(true)),
       readFile: vi.fn(() => Promise.resolve(new Uint8Array([4, 5, 6]))),
+      deleteFile: vi.fn(() => Promise.resolve(true)),
       terminate: vi.fn(() => {
         execReject?.(new Error('terminated'));
         execReject = null;
@@ -304,6 +306,176 @@ describe('useFFmpeg hook', () => {
     });
     expect(screen.getByLabelText('Error')).toHaveTextContent('no-error');
     expect(mockFFmpeg.terminate).toHaveBeenCalled();
+  });
+
+  it('does not mark ffmpeg loaded when cancelled during loading', async () => {
+    const user = userEvent.setup();
+    let resolveLoad!: (value: boolean) => void;
+    mockFFmpeg.load = vi.fn(
+      () =>
+        new Promise<boolean>((resolve) => {
+          resolveLoad = resolve;
+        }),
+    );
+
+    render(<TestComponent />);
+    await user.click(screen.getByRole('button', { name: /load/i }));
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('Loading')).toHaveTextContent('true');
+    });
+
+    await user.click(screen.getByRole('button', { name: /cancel/i }));
+
+    expect(screen.getByLabelText('Loading')).toHaveTextContent('false');
+    expect(screen.getByLabelText('Loaded')).toHaveTextContent('false');
+
+    // Let the (now cancelled) load finish; it must not mark ffmpeg loaded.
+    resolveLoad(true);
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    });
+
+    expect(screen.getByLabelText('Loaded')).toHaveTextContent('false');
+    expect(screen.getByLabelText('Error')).toHaveTextContent('no-error');
+  });
+
+  it('does not report an error when a load is cancelled and then fails', async () => {
+    const user = userEvent.setup();
+    let rejectLoad!: (reason: Error) => void;
+    mockFFmpeg.load = vi.fn(
+      () =>
+        new Promise<boolean>((_resolve, reject) => {
+          rejectLoad = reject;
+        }),
+    );
+
+    render(<TestComponent />);
+    await user.click(screen.getByRole('button', { name: /load/i }));
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('Loading')).toHaveTextContent('true');
+    });
+
+    await user.click(screen.getByRole('button', { name: /cancel/i }));
+    rejectLoad(new Error('terminated'));
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    });
+
+    expect(screen.getByLabelText('Loaded')).toHaveTextContent('false');
+    expect(screen.getByLabelText('Error')).toHaveTextContent('no-error');
+  });
+
+  it('cancels a conversion that is still loading ffmpeg', async () => {
+    const user = userEvent.setup();
+    let resolveLoad!: (value: boolean) => void;
+    mockFFmpeg.load = vi.fn(
+      () =>
+        new Promise<boolean>((resolve) => {
+          resolveLoad = resolve;
+        }),
+    );
+
+    render(<TestComponent />);
+    await user.click(screen.getByRole('button', { name: /convert/i }));
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('Loading')).toHaveTextContent('true');
+    });
+
+    await user.click(screen.getByRole('button', { name: /cancel/i }));
+    resolveLoad(true);
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    });
+
+    expect(screen.getByLabelText('Result')).toHaveTextContent('no-result');
+    expect(screen.getByLabelText('Error')).toHaveTextContent('no-error');
+    expect(screen.getByLabelText('Loaded')).toHaveTextContent('false');
+  });
+
+  it('cancels a conversion while the input file is being written', async () => {
+    const user = userEvent.setup();
+    let resolveWrite!: (value: boolean) => void;
+    mockFFmpeg.writeFile = vi.fn(
+      () =>
+        new Promise<boolean>((resolve) => {
+          resolveWrite = resolve;
+        }),
+    );
+
+    render(<TestComponent />);
+    await user.click(screen.getByRole('button', { name: /convert/i }));
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('Converting')).toHaveTextContent('true');
+    });
+
+    await user.click(screen.getByRole('button', { name: /cancel/i }));
+    resolveWrite(true);
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    });
+
+    expect(screen.getByLabelText('Converting')).toHaveTextContent('false');
+    expect(screen.getByLabelText('Result')).toHaveTextContent('no-result');
+    expect(screen.getByLabelText('Error')).toHaveTextContent('no-error');
+  });
+
+  it('cancels a conversion while ffmpeg is executing', async () => {
+    const user = userEvent.setup();
+    let resolveExec!: (value: number) => void;
+    mockFFmpeg.exec = vi.fn(
+      () =>
+        new Promise<number>((resolve) => {
+          resolveExec = resolve;
+        }),
+    );
+
+    render(<TestComponent />);
+    await user.click(screen.getByRole('button', { name: /convert/i }));
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('Converting')).toHaveTextContent('true');
+    });
+
+    await user.click(screen.getByRole('button', { name: /cancel/i }));
+    resolveExec(0);
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    });
+
+    expect(screen.getByLabelText('Converting')).toHaveTextContent('false');
+    expect(screen.getByLabelText('Result')).toHaveTextContent('no-result');
+    expect(screen.getByLabelText('Error')).toHaveTextContent('no-error');
+  });
+
+  it('deletes temporary input and output files after conversion', async () => {
+    const user = userEvent.setup();
+    render(<TestComponent />);
+
+    await user.click(screen.getByRole('button', { name: /convert/i }));
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('Result')).toHaveTextContent('has-result');
+    });
+    expect(mockFFmpeg.deleteFile).toHaveBeenCalledWith('input.mp4');
+    expect(mockFFmpeg.deleteFile).toHaveBeenCalledWith('output.mp4');
+  });
+
+  it('still returns the result when temp file cleanup fails', async () => {
+    const user = userEvent.setup();
+    mockFFmpeg.deleteFile = vi.fn(() =>
+      Promise.reject(new Error('no such file')),
+    );
+
+    render(<TestComponent />);
+    await user.click(screen.getByRole('button', { name: /convert/i }));
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('Result')).toHaveTextContent('has-result');
+    });
   });
 
   it('throws when ffmpeg remains unloaded', async () => {
