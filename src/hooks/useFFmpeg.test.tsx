@@ -46,7 +46,10 @@ function TestComponent({ file = defaultFile }: TestComponentProps) {
 
       <button
         onClick={() => {
-          void ffmpeg.load();
+          // load() rejects with 'Conversion cancelled' when cancelled
+          // mid-load; the hook already reflects that in state, so the
+          // rejection is expected here and must not go unhandled.
+          void ffmpeg.load().catch(() => undefined);
         }}
         type="button"
       >
@@ -217,6 +220,25 @@ describe('useFFmpeg hook', () => {
       expect(screen.getByLabelText('Result')).toHaveTextContent('has-result');
     });
     expect(screen.getByLabelText('Converting')).toHaveTextContent('false');
+  });
+
+  it('skips loading when converting with ffmpeg already loaded', async () => {
+    const user = userEvent.setup();
+    render(<TestComponent />);
+
+    await user.click(screen.getByRole('button', { name: /load/i }));
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('Loaded')).toHaveTextContent('true');
+    });
+
+    await user.click(screen.getByRole('button', { name: /convert/i }));
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('Result')).toHaveTextContent('has-result');
+    });
+    // The load ran once (for the explicit Load click); convert reused it.
+    expect(mockFFmpeg.load).toHaveBeenCalledTimes(1);
   });
 
   it('falls back to bin extension when the file has no extension', async () => {

@@ -107,14 +107,22 @@ export function BatchQueue() {
 
       <div className="flex flex-wrap gap-2">
         <button
-          className="cursor-pointer rounded-md bg-slate-800 px-4 py-2 font-medium text-white shadow-xs transition-colors hover:bg-slate-700 focus:ring-2 focus:ring-slate-500 focus:outline-hidden disabled:cursor-not-allowed disabled:opacity-50 dark:bg-slate-200 dark:text-slate-900 dark:hover:bg-slate-100"
-          disabled={isRunning || batch.items.length === 0}
+          className={
+            isRunning
+              ? 'cursor-pointer rounded-md bg-red-600 px-4 py-2 font-medium text-white shadow-xs transition-colors hover:bg-red-500 focus:ring-2 focus:ring-red-500 focus:outline-hidden disabled:cursor-not-allowed disabled:opacity-50'
+              : 'cursor-pointer rounded-md bg-slate-800 px-4 py-2 font-medium text-white shadow-xs transition-colors hover:bg-slate-700 focus:ring-2 focus:ring-slate-500 focus:outline-hidden disabled:cursor-not-allowed disabled:opacity-50 dark:bg-slate-200 dark:text-slate-900 dark:hover:bg-slate-100'
+          }
+          disabled={!isRunning && batch.items.length === 0}
           onClick={() => {
-            void batch.runAll();
+            if (isRunning) {
+              batch.cancel();
+            } else {
+              void batch.runAll();
+            }
           }}
           type="button"
         >
-          {isRunning ? 'Converting…' : 'Convert all'}
+          {isRunning ? 'Cancel' : 'Convert all'}
         </button>
 
         <button

@@ -33,6 +33,7 @@ function createBatch(
     removeItem: vi.fn(),
     setItemFormat: vi.fn(),
     runAll: vi.fn(() => Promise.resolve()),
+    cancel: vi.fn(),
     downloadAll: vi.fn(() => Promise.resolve()),
     clearAll: vi.fn(),
     ...overrides,
@@ -194,12 +195,30 @@ describe('BatchQueue', () => {
     render(<BatchQueue />);
 
     expect(screen.getByLabelText(/add files/i)).toBeDisabled();
-    expect(screen.getByRole('button', { name: /converting/i })).toBeDisabled();
+    // The run button becomes an enabled Cancel button while running.
+    expect(screen.getByRole('button', { name: /^cancel$/i })).toBeEnabled();
     expect(
       screen.getByLabelText(/output format for photo.png/i),
     ).toBeDisabled();
     expect(screen.getByRole('button', { name: /remove/i })).toBeDisabled();
     expect(screen.getByRole('button', { name: /clear/i })).toBeDisabled();
+  });
+
+  it('cancels a running batch', async () => {
+    const user = userEvent.setup();
+    const cancel = vi.fn();
+    mockedUseBatchConverter.mockReturnValue(
+      createBatch({
+        items: [createItem({ status: 'converting' })],
+        status: 'running',
+        cancel,
+      }),
+    );
+
+    render(<BatchQueue />);
+
+    await user.click(screen.getByRole('button', { name: /^cancel$/i }));
+    expect(cancel).toHaveBeenCalled();
   });
 
   it('clears the queue', async () => {

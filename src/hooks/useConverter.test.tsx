@@ -1,5 +1,5 @@
 import { FFmpeg } from '@ffmpeg/ffmpeg';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useState } from 'react';
 
@@ -327,6 +327,152 @@ describe('useConverter hook', () => {
       expect(screen.getByLabelText('Status')).toHaveTextContent('idle');
     });
     expect(screen.getByLabelText('Error')).toHaveTextContent('no-error');
+  });
+
+  it('does not restart a conversion cancelled while ffmpeg is loading', async () => {
+    const user = userEvent.setup();
+    let resolveLoad!: (value: boolean) => void;
+    mockFFmpeg.load = vi.fn(
+      () =>
+        new Promise<boolean>((resolve) => {
+          resolveLoad = resolve;
+        }),
+    );
+
+    render(<TestComponent />);
+
+    await user.click(screen.getByRole('button', { name: /set video/i }));
+    await user.click(screen.getByRole('button', { name: /convert/i }));
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('Status')).toHaveTextContent('loading');
+    });
+
+    await user.click(screen.getByRole('button', { name: /cancel/i }));
+
+    // Let the (now cancelled) load finish; the conversion must not resume.
+    resolveLoad(true);
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    });
+
+    expect(screen.getByLabelText('Status')).toHaveTextContent('idle');
+    expect(screen.getByLabelText('Error')).toHaveTextContent('no-error');
+    // The load was attempted once and never retried; no conversion ran.
+    expect(mockFFmpeg.load).toHaveBeenCalledTimes(1);
+    expect(mockFFmpeg.exec).not.toHaveBeenCalled();
+  });
+
+  it('discards a stale result when the file changes during conversion', async () => {
+    const user = userEvent.setup();
+    mockFFmpeg.exec = vi.fn(() => {
+      return new Promise((_resolve, reject) => {
+        execReject = reject;
+      });
+    });
+
+    render(<TestComponent />);
+
+    await user.click(screen.getByRole('button', { name: /set video/i }));
+    await user.click(screen.getByRole('button', { name: /convert/i }));
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('Status')).toHaveTextContent('converting');
+    });
+
+    // Change the file while the conversion is still running.
+    await user.click(screen.getByRole('button', { name: /set image/i }));
+
+    expect(screen.getByLabelText('Category')).toHaveTextContent('image');
+    expect(screen.getByLabelText('Status')).toHaveTextContent('idle');
+
+    // Let the old conversion's work settle; its result must not surface
+    // for the new file.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    });
+
+    expect(screen.getByLabelText('Status')).toHaveTextContent('idle');
+    expect(screen.getByLabelText('Category')).toHaveTextContent('image');
+    expect(screen.getByLabelText('Error')).toHaveTextContent('no-error');
+  });
+
+  it('discards a result that finishes after the file changed', async () => {
+    const user = userEvent.setup();
+    let resolveRead!: (value: Uint8Array) => void;
+    mockFFmpeg.readFile = vi.fn(
+      () =>
+        new Promise<Uint8Array>((resolve) => {
+          resolveRead = resolve;
+        }),
+    );
+
+    render(<TestComponent />);
+
+    await user.click(screen.getByRole('button', { name: /set video/i }));
+    await user.click(screen.getByRole('button', { name: /convert/i }));
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('Status')).toHaveTextContent('converting');
+    });
+
+    // Change the file while the output is still being read.
+    await user.click(screen.getByRole('button', { name: /set image/i }));
+
+    expect(screen.getByLabelText('Category')).toHaveTextContent('image');
+    expect(screen.getByLabelText('Status')).toHaveTextContent('idle');
+
+    // The old conversion's output arrives late; it must not surface.
+    resolveRead(new Uint8Array([4, 5, 6]));
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    });
+
+    expect(screen.getByLabelText('Status')).toHaveTextContent('idle');
+    expect(screen.getByLabelText('Category')).toHaveTextContent('image');
+  });
+
+  it('invalidates the completed result when the output format changes', async () => {
+    const user = userEvent.setup();
+    render(<TestComponent />);
+
+    await user.click(screen.getByRole('button', { name: /set video/i }));
+    await user.click(screen.getByRole('button', { name: /convert/i }));
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('Status')).toHaveTextContent('done');
+    });
+
+    // Change the format; the old result belongs to the previous format.
+    await user.selectOptions(screen.getByLabelText('Output format'), 'webm');
+
+    expect(screen.getByLabelText('Status')).toHaveTextContent('idle');
+    expect(screen.getByLabelText('Filename')).toHaveTextContent('my_clip.webm');
+  });
+
+  it('revokes input and output URLs on unmount', async () => {
+    const user = userEvent.setup();
+    const revokeSpy = vi.spyOn(globalThis.URL, 'revokeObjectURL');
+
+    try {
+      const { unmount } = render(<TestComponent />);
+
+      await user.click(screen.getByRole('button', { name: /set video/i }));
+      await user.click(screen.getByRole('button', { name: /convert/i }));
+
+      await waitFor(() => {
+        expect(screen.getByLabelText('Status')).toHaveTextContent('done');
+      });
+
+      revokeSpy.mockClear();
+      unmount();
+
+      // Both the input preview URL and the converted output URL are
+      // revoked when the converter unmounts.
+      expect(revokeSpy).toHaveBeenCalledTimes(2);
+    } finally {
+      revokeSpy.mockRestore();
+    }
   });
 
   it('reports conversion failures', async () => {

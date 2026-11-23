@@ -85,8 +85,9 @@ export function useFFmpeg(): UseFFmpegResult {
 
       if (cancelGenerationRef.current !== generation) {
         // Cancelled while loading; do not mark the (terminated) instance
-        // as loaded.
-        return;
+        // as loaded. Throw so callers do not proceed to convert (which
+        // would restart the load).
+        throw new Error('Conversion cancelled');
       }
 
       loadErrorRef.current = null;
@@ -94,8 +95,9 @@ export function useFFmpeg(): UseFFmpegResult {
       setStatus('idle');
     } catch (err) {
       if (cancelGenerationRef.current !== generation) {
-        // Cancelled; do not surface an error for the aborted load.
-        return;
+        // Cancelled; do not surface an error for the aborted load, but
+        // throw so callers do not proceed to convert.
+        throw new Error('Conversion cancelled', { cause: err });
       }
 
       // Drop the failed instance so a retry starts from a fresh one.
@@ -128,10 +130,6 @@ export function useFFmpeg(): UseFFmpegResult {
 
     if (!ffmpegRef.current?.loaded) {
       await load();
-    }
-
-    if (cancelGenerationRef.current !== generation) {
-      throw new Error('Conversion cancelled');
     }
 
     const ffmpeg = ffmpegRef.current;

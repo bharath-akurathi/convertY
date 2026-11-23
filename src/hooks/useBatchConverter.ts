@@ -30,6 +30,7 @@ export interface UseBatchConverterResult {
   removeItem: (id: string) => void;
   setItemFormat: (id: string, format: string) => void;
   runAll: () => Promise<void>;
+  cancel: () => void;
   downloadAll: () => Promise<void>;
   clearAll: () => void;
 }
@@ -37,6 +38,12 @@ export interface UseBatchConverterResult {
 export function useBatchConverter(): UseBatchConverterResult {
   const ffmpeg = useFFmpeg();
   const nextIdRef = useRef(0);
+  // Synchronous guard so a second runAll cannot start while one is in
+  // flight (state updates alone cannot prevent the re-entry).
+  const runningRef = useRef(false);
+  // Bumped by cancel/clearAll so the active loop can tell it was stopped
+  // and quit instead of recording results for a discarded batch.
+  const batchGenerationRef = useRef(0);
   const [items, setItems] = useState<BatchItem[]>([]);
   const [status, setStatus] = useState<BatchStatus>('idle');
 
@@ -74,10 +81,15 @@ export function useBatchConverter(): UseBatchConverterResult {
         }
 
         const base = item.outputFilename.replace(/\.[^.]*$/, '');
+        // A completed result belongs to the previous format; drop it so
+        // the old file cannot be downloaded under the new extension.
+        const wasDone = item.status === 'done';
         return {
           ...item,
           outputFormat: format,
           outputFilename: `${base}.${format}`,
+          status: wasDone ? 'queued' : item.status,
+          outputBlob: wasDone ? null : item.outputBlob,
         };
       }),
     );
@@ -90,51 +102,88 @@ export function useBatchConverter(): UseBatchConverterResult {
   }
 
   async function runAll(): Promise<void> {
-    if (items.length === 0) {
+    if (items.length === 0 || runningRef.current) {
       return;
     }
 
+    runningRef.current = true;
+    batchGenerationRef.current += 1;
+    const generation = batchGenerationRef.current;
     setStatus('running');
 
-    for (const item of items) {
-      if (item.status === 'done') {
-        continue;
+    try {
+      for (const item of items) {
+        if (item.status === 'done') {
+          continue;
+        }
+
+        if (!item.category || !item.outputFormat) {
+          updateItem(item.id, {
+            status: 'error',
+            error:
+              'Unsupported file type. Please choose an image, video, or audio file.',
+          });
+          continue;
+        }
+
+        updateItem(item.id, { status: 'converting', error: null });
+
+        try {
+          const result = await convertFile(
+            ffmpeg,
+            item.file,
+            item.outputFormat,
+            item.category,
+            getDefaultOptions(),
+            item.outputFilename,
+          );
+
+          if (batchGenerationRef.current !== generation) {
+            // Cancelled while this item was converting; stop without
+            // recording a result for it.
+            break;
+          }
+
+          updateItem(item.id, {
+            status: 'done',
+            outputBlob: result.blob,
+            outputFilename: result.filename,
+          });
+        } catch (err) {
+          if (batchGenerationRef.current !== generation) {
+            // Cancelled; stop the loop without marking the item failed.
+            break;
+          }
+
+          updateItem(item.id, {
+            status: 'error',
+            error: err instanceof Error ? err.message : 'Conversion failed',
+          });
+        }
       }
+    } finally {
+      runningRef.current = false;
 
-      if (!item.category || !item.outputFormat) {
-        updateItem(item.id, {
-          status: 'error',
-          error:
-            'Unsupported file type. Please choose an image, video, or audio file.',
-        });
-        continue;
-      }
-
-      updateItem(item.id, { status: 'converting', error: null });
-
-      try {
-        const result = await convertFile(
-          ffmpeg,
-          item.file,
-          item.outputFormat,
-          item.category,
-          getDefaultOptions(),
-          item.outputFilename,
+      if (batchGenerationRef.current === generation) {
+        setStatus('done');
+      } else {
+        // The batch was cancelled or cleared; return in-flight items to
+        // the queue so they can be run again.
+        setItems((previous) =>
+          previous.map((item) =>
+            item.status === 'converting'
+              ? { ...item, status: 'queued', error: null }
+              : item,
+          ),
         );
-        updateItem(item.id, {
-          status: 'done',
-          outputBlob: result.blob,
-          outputFilename: result.filename,
-        });
-      } catch (err) {
-        updateItem(item.id, {
-          status: 'error',
-          error: err instanceof Error ? err.message : 'Conversion failed',
-        });
+        setStatus('idle');
       }
     }
+  }
 
-    setStatus('done');
+  function cancel(): void {
+    batchGenerationRef.current += 1;
+    ffmpeg.cancel();
   }
 
   async function downloadAll(): Promise<void> {
@@ -157,6 +206,10 @@ export function useBatchConverter(): UseBatchConverterResult {
   }
 
   function clearAll(): void {
+    // Stop the active loop (if any) before dropping the queue, so a
+    // late result cannot reappear after the clear.
+    batchGenerationRef.current += 1;
+    ffmpeg.cancel();
     setItems([]);
     setStatus('idle');
   }
@@ -168,6 +221,7 @@ export function useBatchConverter(): UseBatchConverterResult {
     removeItem,
     setItemFormat,
     runAll,
+    cancel,
     downloadAll,
     clearAll,
   };

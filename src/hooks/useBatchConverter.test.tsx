@@ -75,6 +75,9 @@ function TestComponent() {
       >
         Run all
       </button>
+      <button onClick={batch.cancel} type="button">
+        Cancel
+      </button>
       <button
         onClick={() => {
           void batch.downloadAll();
@@ -288,5 +291,188 @@ describe('useBatchConverter', () => {
     await waitFor(() => {
       expect(mockedConvertFile).toHaveBeenCalledTimes(2);
     });
+  });
+
+  it('does not start a second run while one is already running', async () => {
+    const user = userEvent.setup();
+    let resolveConvert!: (value: { blob: Blob; filename: string }) => void;
+    mockedConvertFile.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveConvert = resolve;
+        }),
+    );
+
+    render(<TestComponent />);
+
+    await user.click(screen.getByRole('button', { name: /add files/i }));
+    await user.click(screen.getByRole('button', { name: /run all/i }));
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('Status batch-1')).toHaveTextContent(
+        'converting',
+      );
+    });
+
+    // A second run while the first is in flight must be ignored.
+    await user.click(screen.getByRole('button', { name: /run all/i }));
+    expect(mockedConvertFile).toHaveBeenCalledTimes(1);
+
+    resolveConvert({
+      blob: new Blob(['out'], { type: 'image/png' }),
+      filename: 'photo.png',
+    });
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('Batch status')).toHaveTextContent('done');
+    });
+
+    // Only the first run converted the files.
+    expect(mockedConvertFile).toHaveBeenCalledTimes(2);
+  });
+
+  it('cancels a running batch and returns in-flight items to the queue', async () => {
+    const user = userEvent.setup();
+    let resolveConvert!: (value: { blob: Blob; filename: string }) => void;
+    mockedConvertFile.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveConvert = resolve;
+        }),
+    );
+
+    render(<TestComponent />);
+
+    await user.click(screen.getByRole('button', { name: /add files/i }));
+    await user.click(screen.getByRole('button', { name: /run all/i }));
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('Status batch-1')).toHaveTextContent(
+        'converting',
+      );
+    });
+
+    await user.click(screen.getByRole('button', { name: /cancel/i }));
+
+    // The in-flight conversion finishes, but the batch was cancelled, so
+    // its result is discarded and the item goes back to the queue.
+    resolveConvert({
+      blob: new Blob(['out'], { type: 'image/png' }),
+      filename: 'photo.png',
+    });
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('Batch status')).toHaveTextContent('idle');
+    });
+
+    expect(screen.getByLabelText('Status batch-1')).toHaveTextContent('queued');
+    expect(screen.getByLabelText('Error batch-1')).toHaveTextContent(
+      'no-error',
+    );
+    // The second file was never started.
+    expect(mockedConvertFile).toHaveBeenCalledTimes(1);
+  });
+
+  it('stops the loop when a conversion rejects after cancellation', async () => {
+    const user = userEvent.setup();
+    let rejectConvert!: (reason: Error) => void;
+    mockedConvertFile.mockImplementationOnce(
+      () =>
+        new Promise((_resolve, reject) => {
+          rejectConvert = reject;
+        }),
+    );
+
+    render(<TestComponent />);
+
+    await user.click(screen.getByRole('button', { name: /add files/i }));
+    await user.click(screen.getByRole('button', { name: /run all/i }));
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('Status batch-1')).toHaveTextContent(
+        'converting',
+      );
+    });
+
+    await user.click(screen.getByRole('button', { name: /cancel/i }));
+
+    // The in-flight conversion fails because it was cancelled; the item
+    // must not be marked as an error, and the next file must not start.
+    rejectConvert(new Error('Conversion cancelled'));
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('Batch status')).toHaveTextContent('idle');
+    });
+
+    expect(screen.getByLabelText('Status batch-1')).toHaveTextContent('queued');
+    expect(screen.getByLabelText('Error batch-1')).toHaveTextContent(
+      'no-error',
+    );
+    expect(mockedConvertFile).toHaveBeenCalledTimes(1);
+  });
+
+  it('stops the active loop when the queue is cleared', async () => {
+    const user = userEvent.setup();
+    let resolveConvert!: (value: { blob: Blob; filename: string }) => void;
+    mockedConvertFile.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveConvert = resolve;
+        }),
+    );
+
+    render(<TestComponent />);
+
+    await user.click(screen.getByRole('button', { name: /add files/i }));
+    await user.click(screen.getByRole('button', { name: /run all/i }));
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('Status batch-1')).toHaveTextContent(
+        'converting',
+      );
+    });
+
+    await user.click(screen.getByRole('button', { name: /clear all/i }));
+
+    expect(screen.getByLabelText('Item count')).toHaveTextContent('0');
+
+    // The in-flight conversion finishes, but the queue was cleared, so
+    // nothing is recorded and the second file never starts.
+    resolveConvert({
+      blob: new Blob(['out'], { type: 'image/png' }),
+      filename: 'photo.png',
+    });
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('Batch status')).toHaveTextContent('idle');
+    });
+
+    expect(screen.getByLabelText('Item count')).toHaveTextContent('0');
+    expect(mockedConvertFile).toHaveBeenCalledTimes(1);
+  });
+
+  it('invalidates a finished file when its format changes', async () => {
+    const user = userEvent.setup();
+    render(<TestComponent />);
+
+    await user.click(screen.getByRole('button', { name: /add files/i }));
+    await user.click(screen.getByRole('button', { name: /run all/i }));
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('Batch status')).toHaveTextContent('done');
+    });
+
+    expect(screen.getByLabelText('Status batch-1')).toHaveTextContent('done');
+
+    const buttons = screen.getAllByRole('button', { name: /set webp/i });
+    await user.click(buttons[0]);
+
+    // The finished result belonged to the old format, so the file goes
+    // back to the queue to be converted again.
+    expect(screen.getByLabelText('Status batch-1')).toHaveTextContent('queued');
+    expect(screen.getByLabelText('Format batch-1')).toHaveTextContent('webp');
+    expect(screen.getByLabelText('Filename batch-1')).toHaveTextContent(
+      'photo.webp',
+    );
   });
 });
