@@ -5,7 +5,7 @@ import react, { reactCompilerPreset } from '@vitejs/plugin-react';
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
-  base: '/converty/',
+  base: '/convertY/',
   server: {
     headers: {
       'Cross-Origin-Opener-Policy': 'same-origin',
