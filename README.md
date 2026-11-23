@@ -151,8 +151,8 @@ offline once loaded, except the first AVIF/JPEG/WebP encoder download).
 3. The included workflow (`.github/workflows/deploy.yml`) installs
    dependencies, builds the app, and deploys `dist/` on every push to the
    default branch.
-4. The site is served at `https://<user>.github.io/converty/` — the build is
-   configured with `base: '/converty/'` for this. For a custom domain, change
+4. The site is served at `https://<user>.github.io/convertY/` — the build is
+   configured with `base: '/convertY/'` for this. For a custom domain, change
    `base` in `vite.config.mts` to `'./'`.
 
 ### Vercel (free, alternative)
