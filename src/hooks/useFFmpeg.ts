@@ -1,13 +1,13 @@
 import { FFmpeg } from '@ffmpeg/ffmpeg';
-import { fetchFile } from '@ffmpeg/util';
 import { useEffect, useRef, useState } from 'react';
 
+import { readMediaInput } from '../services/readMediaInput';
 import {
   ALLOWED_CDN_PREFIX,
   FFMPEG_CORE_URL,
   FFMPEG_WASM_URL,
 } from '../utils/constants';
-import { getFileExtension } from '../utils/formats';
+import { getInputName } from '../utils/helpers';
 
 type FFmpegStatus = 'idle' | 'loading' | 'converting' | 'error';
 
@@ -29,7 +29,6 @@ export interface UseFFmpegResult {
 
 export function useFFmpeg(): UseFFmpegResult {
   const ffmpegRef = useRef<FFmpeg | null>(null);
-  const loadErrorRef = useRef<string | null>(null);
   // Bumped on every cancel/unmount so in-flight load/convert steps can
   // notice they were cancelled instead of completing afterwards.
   const cancelGenerationRef = useRef(0);
@@ -40,7 +39,6 @@ export function useFFmpeg(): UseFFmpegResult {
 
   function resetError() {
     setError(null);
-    loadErrorRef.current = null;
   }
 
   async function load() {
@@ -90,7 +88,6 @@ export function useFFmpeg(): UseFFmpegResult {
         throw new Error('Conversion cancelled');
       }
 
-      loadErrorRef.current = null;
       setLoaded(true);
       setStatus('idle');
     } catch (err) {
@@ -115,9 +112,7 @@ export function useFFmpeg(): UseFFmpegResult {
       setLoaded(false);
       setStatus('error');
       setError(message);
-      loadErrorRef.current = message;
-    } finally {
-      setProgress(0);
+      throw new Error(message, { cause: err });
     }
   }
 
@@ -134,20 +129,20 @@ export function useFFmpeg(): UseFFmpegResult {
 
     const ffmpeg = ffmpegRef.current;
     if (!ffmpeg?.loaded) {
-      const message = loadErrorRef.current ?? 'FFmpeg is not loaded';
+      const message = 'FFmpeg is not loaded';
       setStatus('error');
       setError(message);
       throw new Error(message);
     }
 
     setStatus('converting');
+    setProgress(0);
     setError(null);
 
-    const extension = getFileExtension(inputFile.name) || 'bin';
-    const inputName = `input.${extension}`;
+    const inputName = getInputName(inputFile);
 
     try {
-      await ffmpeg.writeFile(inputName, await fetchFile(inputFile));
+      await ffmpeg.writeFile(inputName, await readMediaInput(inputFile));
 
       if (cancelGenerationRef.current !== generation) {
         throw new Error('Conversion cancelled');
@@ -169,12 +164,10 @@ export function useFFmpeg(): UseFFmpegResult {
         throw new Error('Unexpected output data format');
       }
 
-      setStatus('idle');
+      if (cancelGenerationRef.current === generation) setStatus('idle');
       return data;
     } catch (err) {
       if (cancelGenerationRef.current !== generation || !ffmpegRef.current) {
-        setStatus('idle');
-        setError(null);
         throw new Error('Conversion cancelled', { cause: err });
       }
 
@@ -196,7 +189,6 @@ export function useFFmpeg(): UseFFmpegResult {
     cancelGenerationRef.current += 1;
     ffmpegRef.current?.terminate();
     ffmpegRef.current = null;
-    loadErrorRef.current = null;
     setLoaded(false);
     setStatus('idle');
     setProgress(0);

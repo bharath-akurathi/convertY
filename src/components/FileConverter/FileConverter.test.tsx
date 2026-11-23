@@ -53,7 +53,7 @@ describe('FileConverter component', () => {
       screen.getByRole('checkbox', { name: /batch mode/i }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole('button', { name: /upload file/i }),
+      screen.getByRole('button', { name: /choose file/i }),
     ).toBeInTheDocument();
     expect(screen.queryByText(/output settings/i)).not.toBeInTheDocument();
   });
@@ -68,12 +68,12 @@ describe('FileConverter component', () => {
       screen.getByRole('heading', { name: /batch conversion/i }),
     ).toBeInTheDocument();
     expect(
-      screen.queryByRole('button', { name: /upload file/i }),
+      screen.queryByRole('button', { name: /choose file/i }),
     ).not.toBeInTheDocument();
 
     await user.click(screen.getByRole('checkbox', { name: /batch mode/i }));
     expect(
-      screen.getByRole('button', { name: /upload file/i }),
+      screen.getByRole('button', { name: /choose file/i }),
     ).toBeInTheDocument();
   });
 
@@ -95,6 +95,23 @@ describe('FileConverter component', () => {
     expect(screen.getByLabelText(/preserve transparency/i)).toBeInTheDocument();
   });
 
+  it('makes advanced settings available on demand', async () => {
+    const user = userEvent.setup();
+    vi.mocked(useConverter).mockReturnValue(
+      createMockConverter({
+        file: new File([], 'clip.mp4'),
+        category: 'video',
+        outputFormat: 'mp4',
+      }),
+    );
+    render(<FileConverter />);
+    const summary = screen.getByText('Advanced options');
+    expect(summary.parentElement).not.toHaveAttribute('open');
+    await user.click(summary);
+    expect(summary.parentElement).toHaveAttribute('open');
+    expect(screen.getByLabelText(/frame rate/i)).toBeVisible();
+  });
+
   it('shows video preview for a video file', () => {
     vi.mocked(useConverter).mockReturnValue(
       createMockConverter({
@@ -111,6 +128,27 @@ describe('FileConverter component', () => {
     expect(screen.getByLabelText(/frame rate/i)).toBeInTheDocument();
     expect(container.querySelector('video')).toBeInTheDocument();
     expect(screen.getByText('Original')).toBeInTheDocument();
+  });
+
+  it('previews a video converted to GIF as an image', () => {
+    vi.mocked(useConverter).mockReturnValue(
+      createMockConverter({
+        category: 'video',
+        outputFormat: 'gif',
+        inputUrl: 'blob:video',
+        outputUrl: 'blob:gif',
+        status: 'done',
+      }),
+    );
+    const { container } = render(<FileConverter />);
+    expect(container.querySelector('video')).toHaveAttribute(
+      'src',
+      'blob:video',
+    );
+    expect(screen.getByAltText('Converted preview')).toHaveAttribute(
+      'src',
+      'blob:gif',
+    );
   });
 
   it('shows audio preview for an audio file', () => {
@@ -148,7 +186,7 @@ describe('FileConverter component', () => {
     expect(button.className).toContain('bg-red-600');
   });
 
-  it('disables cancel button while ffmpeg is loading', () => {
+  it('allows cancelling the initial engine download', () => {
     vi.mocked(useConverter).mockReturnValue(
       createMockConverter({
         file: new File([], 'x.mp3', { type: 'audio/mpeg' }),
@@ -161,7 +199,7 @@ describe('FileConverter component', () => {
     render(<FileConverter />);
 
     const button = screen.getByRole('button', { name: /cancel/i });
-    expect(button).toBeDisabled();
+    expect(button).toBeEnabled();
   });
 
   it('calls cancel when the cancel button is clicked', async () => {

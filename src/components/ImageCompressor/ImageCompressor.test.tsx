@@ -1,4 +1,10 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import type { CompressedImage } from '../../services/imageCompressor';
@@ -81,7 +87,7 @@ describe('ImageCompressor', () => {
     render(<ImageCompressor />);
 
     expect(
-      screen.getByRole('button', { name: /upload file/i }),
+      screen.getByRole('button', { name: /choose file/i }),
     ).toBeInTheDocument();
     expect(screen.queryByText(/output format/i)).not.toBeInTheDocument();
   });
@@ -154,6 +160,40 @@ describe('ImageCompressor', () => {
 
     await user.click(screen.getByLabelText(/^quality$/i));
     expect(screen.getByLabelText(/quality:/i)).toBeInTheDocument();
+  });
+
+  it('disables compression for an empty or negative size target', async () => {
+    const user = userEvent.setup();
+    render(<ImageCompressor />);
+    await selectFile(user);
+    await user.click(screen.getByLabelText(/target size$/i));
+    const target = screen.getByLabelText(/target size \(kb\)/i);
+    await user.clear(target);
+    expect(screen.getByRole('button', { name: 'Compress' })).toBeDisabled();
+    fireEvent.change(target, { target: { value: '-4' } });
+    expect(screen.getByRole('button', { name: 'Compress' })).toBeDisabled();
+  });
+
+  it('does not allocate a preview when compression finishes after unmount', async () => {
+    const user = userEvent.setup();
+    let finish!: (result: CompressedImage) => void;
+    mockedCompressImage.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const { unmount } = render(<ImageCompressor />);
+    await selectFile(user);
+    await user.click(screen.getByRole('button', { name: 'Compress' }));
+    unmount();
+    const create = vi.spyOn(URL, 'createObjectURL');
+    create.mockClear();
+    await act(async () => {
+      finish(createResult());
+      await Promise.resolve();
+    });
+    expect(create).not.toHaveBeenCalled();
   });
 
   it('warns when the target size could not be reached', async () => {

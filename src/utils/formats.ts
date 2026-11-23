@@ -84,6 +84,10 @@ export function getFileExtension(filename: string): string {
   return parts.length > 1 ? parts[parts.length - 1].toLowerCase() : '';
 }
 
+export function isSvg(file: File): boolean {
+  return file.type === 'image/svg+xml' || getFileExtension(file.name) === 'svg';
+}
+
 export function getCategory(file: File): Category | null {
   if (file.type.startsWith('image/')) {
     return 'image';

@@ -1,12 +1,11 @@
 {
-  "name": "File Converter",
-  "short_name": "File Converter",
-  "description": "📁 File converter that converts files in the browser using FFmpeg WebAssembly.",
+  "name": "convertY File Workbench",
+  "short_name": "convertY",
+  "description": "Convert, compress, and edit files on your device.",
   "start_url": "./",
   "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#ffffff",
-  "orientation": "portrait-primary",
+  "background_color": "#f7f8f3",
+  "theme_color": "#20543c",
   "icons": [
     {
       "src": "./logo.svg",

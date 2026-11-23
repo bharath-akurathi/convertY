@@ -54,6 +54,12 @@ describe('imageEditor', () => {
     });
   });
 
+  it('intersects a crop dragged past the top left with the actual image', () => {
+    expect(
+      normalizeCropRect({ x: -40, y: -20, width: 50, height: 25 }, 100, 100),
+    ).toEqual({ x: 0, y: 0, width: 10, height: 5 });
+  });
+
   it('clamps a crop rectangle to the image bounds', () => {
     expect(
       normalizeCropRect({ x: -10, y: -5, width: 900, height: 700 }, 800, 600),

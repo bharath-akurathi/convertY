@@ -77,8 +77,8 @@ export function normalizeCropRect(
 ): CropRect {
   const x = Math.max(0, Math.min(rect.x, imageWidth));
   const y = Math.max(0, Math.min(rect.y, imageHeight));
-  const width = Math.max(0, Math.min(rect.width, imageWidth - x));
-  const height = Math.max(0, Math.min(rect.height, imageHeight - y));
+  const width = Math.max(0, Math.min(rect.x + rect.width, imageWidth) - x);
+  const height = Math.max(0, Math.min(rect.y + rect.height, imageHeight) - y);
 
   return { x, y, width, height };
 }

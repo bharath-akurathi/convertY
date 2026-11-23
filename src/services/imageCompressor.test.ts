@@ -218,6 +218,30 @@ describe('imageCompressor', () => {
     expect(result.targetMet).toBe(false);
   });
 
+  it('keeps the original PNG dimensions when it already fits', async () => {
+    const result = await compressToTargetSize(
+      new File([], 'photo.png'),
+      'png',
+      400,
+    );
+    expect(result).toMatchObject({ width: 800, height: 600, targetMet: true });
+    expect(result.blob.size).toBe(400);
+  });
+
+  it('returns the smallest encoding when a later scale produces a larger file', async () => {
+    mockedPng
+      .mockResolvedValueOnce(new ArrayBuffer(15))
+      .mockResolvedValueOnce(new ArrayBuffer(2))
+      .mockResolvedValueOnce(new ArrayBuffer(3));
+    const result = await compressToTargetSize(
+      new File([], 'photo.png'),
+      'png',
+      1,
+    );
+    expect(result.blob.size).toBe(2);
+    expect(result.targetMet).toBe(false);
+  });
+
   it('shrinks PNG dimensions to hit a target size', async () => {
     const file = new File(['x'], 'photo.png', { type: 'image/png' });
     const result = await compressToTargetSize(file, 'png', 350);

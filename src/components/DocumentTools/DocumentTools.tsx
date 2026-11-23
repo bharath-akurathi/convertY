@@ -1,19 +1,5 @@
 import { useState } from 'react';
 
-import {
-  compressPdf,
-  docxToText,
-  imagesToPdf,
-  mergePdfs,
-  parsePageOrder,
-  parsePageRanges,
-  pdfToImages,
-  pdfToText,
-  reorderPdf,
-  splitPdf,
-  textToDocx,
-  textToPdf,
-} from '../../services/pdfTools';
 import { downloadBlob } from '../../utils/download';
 import { isLargeFile } from '../../utils/helpers';
 
@@ -94,6 +80,20 @@ export function DocumentTools() {
     setTextResult(null);
 
     try {
+      const {
+        compressPdf,
+        docxToText,
+        imagesToPdf,
+        mergePdfs,
+        parsePageOrder,
+        parsePageRanges,
+        pdfToImages,
+        pdfToText,
+        reorderPdf,
+        splitPdf,
+        textToDocx,
+        textToPdf,
+      } = await import('../../services/pdfTools');
       const first = files[0];
       const base = getBaseName(first.name);
 
@@ -221,16 +221,18 @@ export function DocumentTools() {
   }
 
   return (
-    <div className="space-y-6 rounded-lg bg-white p-6 shadow-xs dark:bg-slate-800">
-      <h2 className="text-xl font-semibold">Document tools</h2>
-      <p className="text-sm text-slate-600 dark:text-slate-400">
-        Work with PDFs, text, and Word documents entirely in your browser.
-      </p>
+    <div className="tool-surface">
+      <header>
+        <h2 className="tool-title">Document tools</h2>
+        <p className="tool-summary">
+          Work with PDFs, text, and Word documents entirely in your browser.
+        </p>
+      </header>
 
       <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">
         Operation
         <select
-          className="mt-1 block w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-slate-900 shadow-xs focus:border-slate-500 focus:outline-hidden disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+          className="field-control"
           disabled={isBusy}
           onChange={(event) => {
             setOperation(event.target.value as Operation);
@@ -261,7 +263,7 @@ export function DocumentTools() {
       <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">
         {allowsMultiple ? 'Select files' : 'Select a file'}
         <input
-          className="mt-1 block w-full text-sm text-slate-700 file:mr-4 file:cursor-pointer file:rounded-md file:border-0 file:bg-slate-800 file:px-4 file:py-2 file:font-medium file:text-white hover:file:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50 dark:text-slate-200 dark:file:bg-slate-200 dark:file:text-slate-900"
+          className="file-input"
           disabled={isBusy}
           multiple={allowsMultiple}
           onChange={handleFilesSelected}
@@ -287,7 +289,7 @@ export function DocumentTools() {
         <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">
           Page ranges
           <input
-            className="mt-1 block w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-slate-900 shadow-xs focus:border-slate-500 focus:outline-hidden disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+            className="field-control"
             disabled={isBusy}
             onChange={(event) => {
               setRangeText(event.target.value);
@@ -302,7 +304,7 @@ export function DocumentTools() {
         <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">
           New page order
           <input
-            className="mt-1 block w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-slate-900 shadow-xs focus:border-slate-500 focus:outline-hidden disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+            className="field-control"
             disabled={isBusy}
             onChange={(event) => {
               setOrderText(event.target.value);
@@ -317,7 +319,7 @@ export function DocumentTools() {
         <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">
           Image format
           <select
-            className="mt-1 block w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-slate-900 shadow-xs focus:border-slate-500 focus:outline-hidden disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+            className="field-control"
             disabled={isBusy}
             onChange={(event) => {
               setImageFormat(event.target.value as 'jpeg' | 'png');
@@ -331,7 +333,7 @@ export function DocumentTools() {
       )}
 
       <button
-        className="w-full cursor-pointer rounded-md bg-slate-800 px-4 py-2 font-medium text-white shadow-xs transition-colors hover:bg-slate-700 focus:ring-2 focus:ring-slate-500 focus:outline-hidden disabled:cursor-not-allowed disabled:opacity-50 dark:bg-slate-200 dark:text-slate-900 dark:hover:bg-slate-100"
+        className="primary-action w-full"
         disabled={isBusy || files.length === 0}
         onClick={() => {
           void runOperation();

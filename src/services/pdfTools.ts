@@ -2,7 +2,11 @@ import { Document, Packer, Paragraph, TextRun } from 'docx';
 import { jsPDF } from 'jspdf';
 import * as mammoth from 'mammoth';
 import { PDFDocument } from 'pdf-lib';
-import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist';
+import {
+  getDocument,
+  GlobalWorkerOptions,
+  type PDFDocumentProxy,
+} from 'pdfjs-dist';
 import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 
 export interface PageRange {
@@ -79,15 +83,21 @@ export function parsePageOrder(input: string): number[] {
   });
 }
 
-function ensurePdfWorker(): void {
+async function withPdf<T>(
+  file: File,
+  read: (pdf: PDFDocumentProxy) => T | Promise<T>,
+): Promise<T> {
   GlobalWorkerOptions.workerSrc = workerUrl;
+  const task = getDocument({ data: await file.arrayBuffer() });
+  try {
+    return await read(await task.promise);
+  } finally {
+    await task.destroy();
+  }
 }
 
 export async function getPdfPageCount(file: File): Promise<number> {
-  ensurePdfWorker();
-  const data = await file.arrayBuffer();
-  const pdf = await getDocument({ data }).promise;
-  return pdf.numPages;
+  return withPdf(file, (pdf) => pdf.numPages);
 }
 
 export async function mergePdfs(files: File[]): Promise<Uint8Array> {
@@ -203,47 +213,45 @@ export async function pdfToImages(
   format: 'jpeg' | 'png' = 'png',
   scale = 2,
 ): Promise<Blob[]> {
-  ensurePdfWorker();
-  const data = await file.arrayBuffer();
-  const pdf = await getDocument({ data }).promise;
-  const images: Blob[] = [];
-  const mimeType = format === 'jpeg' ? 'image/jpeg' : 'image/png';
+  return withPdf(file, async (pdf) => {
+    const images: Blob[] = [];
+    const mimeType = format === 'jpeg' ? 'image/jpeg' : 'image/png';
 
-  for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
-    const page = await pdf.getPage(pageNumber);
-    const viewport = page.getViewport({ scale });
-    const canvas = document.createElement('canvas');
-    canvas.width = viewport.width;
-    canvas.height = viewport.height;
-    const context = canvas.getContext('2d');
+    for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
+      const page = await pdf.getPage(pageNumber);
+      const viewport = page.getViewport({ scale });
+      const canvas = document.createElement('canvas');
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+      const context = canvas.getContext('2d');
 
-    if (!context) {
-      throw new Error('Canvas 2D context is not available');
+      if (!context) {
+        throw new Error('Canvas 2D context is not available');
+      }
+
+      await page.render({ canvas, canvasContext: context, viewport }).promise;
+      images.push(await canvasToBlob(canvas, mimeType));
     }
 
-    await page.render({ canvas, canvasContext: context, viewport }).promise;
-    images.push(await canvasToBlob(canvas, mimeType));
-  }
-
-  return images;
+    return images;
+  });
 }
 
 export async function pdfToText(file: File): Promise<string> {
-  ensurePdfWorker();
-  const data = await file.arrayBuffer();
-  const pdf = await getDocument({ data }).promise;
-  const parts: string[] = [];
+  return withPdf(file, async (pdf) => {
+    const parts: string[] = [];
 
-  for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
-    const page = await pdf.getPage(pageNumber);
-    const content = await page.getTextContent();
-    const text = content.items
-      .map((item) => ('str' in item ? item.str : ''))
-      .join(' ');
-    parts.push(text);
-  }
+    for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
+      const page = await pdf.getPage(pageNumber);
+      const content = await page.getTextContent();
+      const text = content.items
+        .map((item) => ('str' in item ? item.str : ''))
+        .join(' ');
+      parts.push(text);
+    }
 
-  return parts.join('\n');
+    return parts.join('\n');
+  });
 }
 
 export async function compressPdf(file: File): Promise<Uint8Array> {

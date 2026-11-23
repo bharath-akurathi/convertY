@@ -20,7 +20,7 @@ export function FormatSelector({
     <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">
       Output format
       <select
-        className="mt-1 block w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-slate-900 shadow-xs focus:border-slate-500 focus:outline-hidden disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+        className="field-control"
         disabled={disabled || !category}
         onChange={(event) => {
           onChange(event.target.value);

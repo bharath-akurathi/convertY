@@ -15,7 +15,10 @@ import { FileDropzone } from '../FileDropzone';
 
 type CompressMode = 'quality' | 'target';
 
-type CompressResult = CompressedImage & { targetMet?: boolean };
+type CompressResult = CompressedImage & {
+  targetMet?: boolean;
+  targetKb?: number;
+};
 
 export function ImageCompressor() {
   const [file, setFile] = useState<File | null>(null);
@@ -36,6 +39,7 @@ export function ImageCompressor() {
   useEffect(() => {
     return () => {
       revokeFileUrl(inputUrlRef.current);
+      inputUrlRef.current = null;
       revokeFileUrl(resultUrlRef.current);
     };
   }, []);
@@ -65,8 +69,12 @@ export function ImageCompressor() {
     try {
       const compressed =
         mode === 'target'
-          ? await compressToTargetSize(file, format, targetKb * 1024)
+          ? {
+              ...(await compressToTargetSize(file, format, targetKb * 1024)),
+              targetKb,
+            }
           : await compressImage(file, { format, quality });
+      if (!inputUrlRef.current) return;
       revokeFileUrl(resultUrlRef.current);
       const url = createFileUrl(compressed.blob);
       resultUrlRef.current = url;
@@ -98,13 +106,20 @@ export function ImageCompressor() {
       : 0;
 
   return (
-    <div className="space-y-6 rounded-lg bg-white p-6 shadow-xs dark:bg-slate-800">
-      <h2 className="text-xl font-semibold">Image compressor</h2>
-      <p className="text-sm text-slate-600 dark:text-slate-400">
-        Shrink images with no upload — encoding happens in your browser.
-      </p>
+    <div className="tool-surface">
+      <header>
+        <h2 className="tool-title">Image compressor</h2>
+        <p className="tool-summary">
+          Reduce image size by choosing a quality level or a target file size.
+        </p>
+      </header>
 
-      <FileDropzone disabled={isBusy} onFileSelect={handleFileSelect} />
+      <FileDropzone
+        compact={Boolean(file)}
+        hint="Choose an image from your device"
+        disabled={isBusy}
+        onFileSelect={handleFileSelect}
+      />
 
       {file && (
         <div>
@@ -125,7 +140,7 @@ export function ImageCompressor() {
           <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">
             Output format
             <select
-              className="mt-1 block w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-slate-900 shadow-xs focus:border-slate-500 focus:outline-hidden disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+              className="field-control"
               disabled={isBusy}
               onChange={(event) => {
                 setFormat(event.target.value as CompressorFormat);
@@ -199,7 +214,7 @@ export function ImageCompressor() {
             <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">
               Target size (KB)
               <input
-                className="mt-1 block w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-slate-900 shadow-xs focus:border-slate-500 focus:outline-hidden disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+                className="field-control"
                 disabled={isBusy}
                 min={1}
                 onChange={(event) => {
@@ -212,8 +227,8 @@ export function ImageCompressor() {
           )}
 
           <button
-            className="w-full cursor-pointer rounded-md bg-slate-800 px-4 py-2 font-medium text-white shadow-xs transition-colors hover:bg-slate-700 focus:ring-2 focus:ring-slate-500 focus:outline-hidden disabled:cursor-not-allowed disabled:opacity-50 dark:bg-slate-200 dark:text-slate-900 dark:hover:bg-slate-100"
-            disabled={isBusy}
+            className="primary-action w-full"
+            disabled={isBusy || (mode === 'target' && targetKb < 1)}
             onClick={() => {
               void handleCompress();
             }}
@@ -239,13 +254,16 @@ export function ImageCompressor() {
           <p className="text-sm text-slate-600 dark:text-slate-400">
             {formatBytes(file.size)} → {formatBytes(result.blob.size)} (
             {savedPercent}% smaller, {result.width}×{result.height}
-            {mode === 'target' ? `, quality ${String(result.quality)}` : ''})
+            {result.targetKb !== undefined
+              ? `, quality ${String(result.quality)}`
+              : ''}
+            )
           </p>
 
-          {mode === 'target' && result.targetMet === false && (
+          {result.targetMet === false && (
             <p className="rounded-md bg-amber-50 p-3 text-sm text-amber-700 dark:bg-amber-900/30 dark:text-amber-200">
-              Could not reach {targetKb} KB — the smallest achievable output is{' '}
-              {formatBytes(result.blob.size)}. Try a smaller target or a
+              Could not reach {result.targetKb} KB. The smallest result was{' '}
+              {formatBytes(result.blob.size)}. Try a larger target or a
               different format.
             </p>
           )}

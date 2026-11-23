@@ -1,9 +1,78 @@
 @import 'tailwindcss';
+@import '@fontsource-variable/manrope/wght.css';
+@import '@fontsource-variable/fraunces/wght.css';
+@import '@fontsource-variable/fraunces/wght-italic.css';
 
-.github-corner > svg {
-  @apply opacity-50 transition-opacity duration-400;
+@theme {
+  --font-sans: 'Manrope Variable', system-ui, sans-serif;
+  --font-display: 'Fraunces Variable', Georgia, serif;
+  --color-studio: #f7f8f3;
+  --color-pine-50: #f2f7ec;
+  --color-pine-100: #e2efda;
+  --color-pine-200: #c6e0b7;
+  --color-pine-300: #a9d19c;
+  --color-pine-600: #37734e;
+  --color-pine-700: #2b6145;
+  --color-pine-800: #20543c;
+  --color-pine-950: #132d20;
+  --color-slate-50: #f7f9f6;
+  --color-slate-100: #edf1ea;
+  --color-slate-150: #e9ede5;
+  --color-slate-200: #dce2d9;
+  --color-slate-300: #bcc8be;
+  --color-slate-400: #a3b1a6;
+  --color-slate-500: #607268;
+  --color-slate-600: #506357;
+  --color-slate-700: #3a4d41;
+  --color-slate-800: #293b30;
+  --color-slate-900: #1b2b21;
+  --color-slate-950: #131e17;
 }
 
-.github-corner:hover > svg {
-  @apply opacity-100;
+@layer base {
+  :root {
+    @apply scheme-light dark:scheme-dark;
+  }
+  :focus-visible {
+    @apply outline-pine-600 dark:outline-pine-300 outline-2 outline-offset-4;
+  }
+  input {
+    @apply accent-pine-700 dark:accent-pine-300;
+  }
+  ::selection {
+    @apply bg-pine-200 text-pine-950;
+  }
+}
+
+@layer components {
+  .workspace-width {
+    @apply mx-auto w-[calc(100%-2rem)] max-w-[1120px] sm:w-[calc(100%-4rem)];
+  }
+  .tool-surface {
+    @apply min-w-0 space-y-5 rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_3px_12px_#213e2b06] sm:space-y-6 sm:p-7 dark:border-slate-700 dark:bg-slate-900;
+  }
+  .tool-title {
+    @apply text-2xl leading-tight font-bold tracking-[-0.035em] sm:text-[1.75rem];
+  }
+  .tool-summary {
+    @apply mt-1.5 text-sm leading-relaxed text-slate-600 dark:text-slate-300;
+  }
+  .field-control {
+    @apply focus:border-pine-600 focus-visible:outline-pine-600 dark:focus-visible:outline-pine-300 mt-1.5 block min-h-11 w-full min-w-0 rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 disabled:cursor-not-allowed disabled:opacity-55 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100;
+  }
+  select.field-control {
+    @apply appearance-none bg-[url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='16'%20height='16'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='%236b8271'%20stroke-width='2'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='m6%209%206%206%206-6'/%3E%3C/svg%3E")] bg-size-[1rem] bg-position-[right_0.8rem_center] bg-no-repeat pr-10;
+  }
+  .file-input {
+    @apply file:bg-pine-800 hover:file:bg-pine-700 dark:file:bg-pine-200 dark:file:text-pine-950 mt-2 block w-full min-w-0 rounded-xl border border-dashed border-slate-300 bg-slate-50 p-3 text-sm text-slate-600 file:mr-3 file:cursor-pointer file:rounded-lg file:border-0 file:px-4 file:py-2.5 file:font-semibold file:text-white disabled:opacity-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200;
+  }
+  .primary-action {
+    @apply bg-pine-800 hover:bg-pine-700 dark:bg-pine-200 dark:text-pine-950 dark:hover:bg-pine-300 inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-lg px-4 py-2 font-bold text-white transition-colors disabled:cursor-not-allowed disabled:opacity-45;
+  }
+  .file-sheet {
+    @apply flex h-[120px] w-24 flex-col items-start justify-between rounded-[5px] px-4 pt-4 pb-3 [clip-path:polygon(0_0,calc(100%-18px)_0,100%_18px,100%_100%,0_100%)] after:absolute after:top-0 after:right-0 after:size-[18px] after:rounded-bl-sm after:bg-black/15;
+  }
+  .sheet-format {
+    @apply font-mono text-sm font-bold tracking-[0.08em];
+  }
 }

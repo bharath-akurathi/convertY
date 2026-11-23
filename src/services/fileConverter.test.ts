@@ -26,7 +26,7 @@ describe('convertFile', () => {
     expect(engine.load).not.toHaveBeenCalled();
     expect(engine.convert).toHaveBeenCalledWith(
       file,
-      'photo.jpg',
+      'output.jpg',
       expect.arrayContaining(['-i', 'input.png']),
     );
     expect(result.filename).toBe('photo.jpg');
@@ -44,6 +44,21 @@ describe('convertFile', () => {
     expect(result.filename).toBe('song.wav');
   });
 
+  it.each(['input.png', '-option.png'])(
+    'uses a safe working filename for %s',
+    async (name) => {
+      const engine = createEngine();
+      const file = new File([], name, { type: 'image/png' });
+      const result = await convertFile(engine, file, 'png', 'image', options);
+      expect(engine.convert).toHaveBeenCalledWith(
+        file,
+        'output.png',
+        expect.any(Array),
+      );
+      expect(result.filename).toBe(name);
+    },
+  );
+
   it('uses a custom output filename when given', async () => {
     const engine = createEngine();
     const file = new File([], 'clip.mp4', { type: 'video/mp4' });
@@ -60,7 +75,7 @@ describe('convertFile', () => {
     expect(result.filename).toBe('my_clip_.webm');
     expect(engine.convert).toHaveBeenCalledWith(
       file,
-      'my_clip_.webm',
+      'output.webm',
       expect.any(Array),
     );
   });
@@ -81,7 +96,7 @@ describe('convertFile', () => {
     expect(result.filename).toBe('my_clip_.webm');
     expect(engine.convert).toHaveBeenCalledWith(
       file,
-      'my_clip_.webm',
+      'output.webm',
       expect.any(Array),
     );
   });

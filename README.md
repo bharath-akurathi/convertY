@@ -51,10 +51,11 @@ fflate) — nothing is uploaded to any server.
 | Category | Inputs                              | Outputs                        |
 | -------- | ----------------------------------- | ------------------------------ |
 | Image    | PNG, JPEG, WebP, GIF, BMP, ICO, SVG | PNG, JPEG, WebP, GIF, BMP, ICO |
-| Video    | MP4, WebM, MOV, AVI, MKV, GIF       | MP4, WebM, MOV, AVI, MKV, GIF  |
+| Video    | MP4, WebM, MOV, AVI, MKV            | MP4, WebM, MOV, AVI, MKV, GIF  |
 | Audio    | MP3, WAV, OGG, AAC, FLAC, M4A       | MP3, WAV, OGG, AAC, FLAC, M4A  |
 
-> SVG inputs are rasterized to the chosen bitmap format.
+> The browser rasterizes SVG inputs. Converting an animation to PNG, JPEG, BMP,
+> or ICO exports its first frame. ICO outputs fit within 256 × 256 pixels.
 
 ### Compressor formats
 
@@ -140,8 +141,8 @@ Runs the tests with coverage (the project enforces 100% coverage).
 
 The app is a static site — no server is needed. FFmpeg.wasm loads its core
 from the jsDelivr CDN at runtime, so the deployed site needs internet access
-for conversions (compression, editing, documents, and archives work fully
-offline once loaded, except the first AVIF/JPEG/WebP encoder download).
+for media conversions. The other tools load their libraries, workers, and
+image encoders from the deployed site as needed.
 
 ### GitHub Pages (free)
 
@@ -159,7 +160,7 @@ offline once loaded, except the first AVIF/JPEG/WebP encoder download).
 
 1. Import the repository in Vercel.
 2. Framework preset: **Vite**.
-3. Build command: `npm run build`; output directory: `dist/`.
+3. For a site served at the domain root, use `npm run build -- --base /` as the build command and `dist/` as the output directory.
 4. Deploy — no extra configuration is needed.
 
 ## Architecture

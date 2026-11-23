@@ -19,17 +19,19 @@ export function BatchQueue() {
   }
 
   return (
-    <div className="space-y-6 rounded-lg bg-white p-6 shadow-xs dark:bg-slate-800">
-      <h2 className="text-xl font-semibold">Batch conversion</h2>
-      <p className="text-sm text-slate-600 dark:text-slate-400">
-        Convert multiple files one after another. FFmpeg runs one conversion at
-        a time, so files are processed sequentially.
-      </p>
+    <div className="space-y-5 border-t border-slate-200 pt-5 dark:border-slate-700">
+      <header>
+        <h2 className="tool-title">Batch conversion</h2>
+        <p className="tool-summary">
+          Add files to the queue, choose their formats, and download the results
+          together.
+        </p>
+      </header>
 
       <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">
         Add files
         <input
-          className="mt-1 block w-full text-sm text-slate-700 file:mr-4 file:cursor-pointer file:rounded-md file:border-0 file:bg-slate-800 file:px-4 file:py-2 file:font-medium file:text-white hover:file:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50 dark:text-slate-200 dark:file:bg-slate-200 dark:file:text-slate-900"
+          className="file-input"
           disabled={isRunning}
           multiple
           onChange={handleFilesSelected}
@@ -110,7 +112,7 @@ export function BatchQueue() {
           className={
             isRunning
               ? 'cursor-pointer rounded-md bg-red-600 px-4 py-2 font-medium text-white shadow-xs transition-colors hover:bg-red-500 focus:ring-2 focus:ring-red-500 focus:outline-hidden disabled:cursor-not-allowed disabled:opacity-50'
-              : 'cursor-pointer rounded-md bg-slate-800 px-4 py-2 font-medium text-white shadow-xs transition-colors hover:bg-slate-700 focus:ring-2 focus:ring-slate-500 focus:outline-hidden disabled:cursor-not-allowed disabled:opacity-50 dark:bg-slate-200 dark:text-slate-900 dark:hover:bg-slate-100'
+              : 'primary-action'
           }
           disabled={!isRunning && batch.items.length === 0}
           onClick={() => {

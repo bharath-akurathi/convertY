@@ -8,18 +8,35 @@ describe('App component', () => {
     render(<App />);
 
     expect(
-      screen.getByRole('heading', { level: 1, name: /convertY/i }),
+      screen.getByRole('heading', { level: 1, name: /file workbench/i }),
     ).toBeInTheDocument();
     expect(
       screen.getByText(/files never leave your device/i),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole('button', { name: /upload file/i }),
+      screen.getByRole('button', { name: /choose file/i }),
     ).toBeInTheDocument();
-    expect(screen.getByText(/archives: zip only/i)).toBeInTheDocument();
+    expect(
+      screen.getByRole('tabpanel', { name: 'Convert' }),
+    ).toBeInTheDocument();
     expect(
       screen.getByText(/remarkablemark\/file-converter/i),
     ).toBeInTheDocument();
+  });
+
+  it('moves through tools by keyboard and keeps the panel labelled', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    screen.getByRole('tab', { name: 'Convert' }).focus();
+    await user.keyboard('{ArrowLeft}');
+    expect(screen.getByRole('tab', { name: 'Archives' })).toHaveFocus();
+    await user.keyboard('{ArrowRight}{End}{Home}{ArrowRight}');
+    expect(screen.getByRole('tab', { name: 'Compress' })).toHaveFocus();
+    expect(
+      screen.getByRole('tabpanel', { name: 'Compress' }),
+    ).toBeInTheDocument();
+    await user.keyboard('{Tab}');
+    expect(screen.getByRole('tabpanel')).toHaveFocus();
   });
 
   it('switches tools when a tab is clicked', async () => {
@@ -27,7 +44,7 @@ describe('App component', () => {
     render(<App />);
 
     expect(
-      screen.getByRole('button', { name: /upload file/i }),
+      screen.getByRole('button', { name: /choose file/i }),
     ).toBeInTheDocument();
 
     await user.click(screen.getByRole('tab', { name: 'Compress' }));
@@ -55,7 +72,7 @@ describe('App component', () => {
 
     await user.click(screen.getByRole('tab', { name: 'Convert' }));
     expect(
-      screen.getByRole('button', { name: /upload file/i }),
+      screen.getByRole('button', { name: /choose file/i }),
     ).toBeInTheDocument();
   });
 });

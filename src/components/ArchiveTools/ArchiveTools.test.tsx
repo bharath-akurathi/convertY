@@ -94,6 +94,23 @@ describe('ArchiveTools', () => {
     );
   });
 
+  it('reports an archive containing only directory entries as empty', async () => {
+    const user = userEvent.setup();
+    mockedExtractZip.mockResolvedValueOnce([
+      { name: 'folder/', size: 0, data: new Uint8Array() },
+    ]);
+    render(<ArchiveTools />);
+    await user.click(screen.getByRole('radio', { name: 'Extract ZIP' }));
+    await uploadFiles(user, [new File([], 'empty.zip')]);
+    await user.click(screen.getByRole('button', { name: 'Extract ZIP' }));
+    expect(
+      await screen.findByText('This archive contains no files.'),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /download/i })).toBeNull();
+    await user.click(screen.getByRole('radio', { name: 'Create ZIP' }));
+    expect(screen.queryByText('This archive contains no files.')).toBeNull();
+  });
+
   it('extracts a ZIP and lists its contents with per-file downloads', async () => {
     const user = userEvent.setup();
     render(<ArchiveTools />);

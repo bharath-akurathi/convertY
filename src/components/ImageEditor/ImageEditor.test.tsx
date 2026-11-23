@@ -95,7 +95,7 @@ describe('ImageEditor', () => {
     render(<ImageEditor />);
 
     expect(
-      screen.getByRole('button', { name: /upload file/i }),
+      screen.getByRole('button', { name: /choose file/i }),
     ).toBeInTheDocument();
     expect(screen.queryByText(/rotate right/i)).not.toBeInTheDocument();
   });
@@ -375,6 +375,31 @@ describe('ImageEditor', () => {
     );
   });
 
+  it('clears the previous bitmap before decoding a replacement and releases a late decode', async () => {
+    const user = userEvent.setup();
+    const { unmount } = render(<ImageEditor />);
+    await selectFile(user);
+    let finish!: (bitmap: ImageBitmap) => void;
+    vi.mocked(createImageBitmap).mockReturnValueOnce(
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+    );
+    await user.upload(
+      getFileInput(),
+      new File(['b'], 'next.png', { type: 'image/png' }),
+    );
+    expect(screen.queryByRole('button', { name: 'Export' })).toBeNull();
+    unmount();
+    const close = vi.fn();
+    const late: ImageBitmap = { width: 800, height: 600, close };
+    await act(async () => {
+      finish(late);
+      await Promise.resolve();
+    });
+    expect(close).toHaveBeenCalledOnce();
+  });
+
   it('ignores a stale image decode when a newer file was selected', async () => {
     const user = userEvent.setup();
     let resolveFirstDecode!: (bitmap: ImageBitmap) => void;
@@ -478,6 +503,28 @@ describe('ImageEditor', () => {
     expect(revoke.mock.calls.length).toBeGreaterThan(callsBeforeUnmount);
 
     revoke.mockRestore();
+  });
+
+  it('does not allocate a preview for an export that finishes after unmount', async () => {
+    const user = userEvent.setup();
+    let finish!: (blob: Blob) => void;
+    mockedApplyEdits.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const { unmount } = render(<ImageEditor />);
+    await selectFile(user);
+    await user.click(screen.getByRole('button', { name: 'Export' }));
+    unmount();
+    const create = vi.spyOn(URL, 'createObjectURL');
+    create.mockClear();
+    await act(async () => {
+      finish(new Blob());
+      await Promise.resolve();
+    });
+    expect(create).not.toHaveBeenCalled();
   });
 
   it('shows an error when export fails', async () => {

@@ -12,7 +12,6 @@ import {
   getOutputFilename,
   isLargeFile,
   revokeFileUrl,
-  sanitizeFilename,
 } from '../utils/helpers';
 import { useFFmpeg } from './useFFmpeg';
 
@@ -75,6 +74,7 @@ export function useConverter(): UseConverterResult {
 
   useEffect(() => {
     return () => {
+      operationIdRef.current += 1;
       if (inputUrlRef.current) {
         revokeFileUrl(inputUrlRef.current);
       }
@@ -215,7 +215,10 @@ export function useConverter(): UseConverterResult {
   }
 
   function cancel() {
+    operationIdRef.current += 1;
     ffmpeg.cancel();
+    setStatus('idle');
+    setError(null);
   }
 
   async function convert() {
@@ -277,12 +280,6 @@ export function useConverter(): UseConverterResult {
         return;
       }
 
-      if (err instanceof Error && err.message === 'Conversion cancelled') {
-        setStatus('idle');
-        setError(null);
-        return;
-      }
-
       setStatus('error');
       /* v8 ignore start */
       setError(err instanceof Error ? err.message : 'Conversion failed');
@@ -297,8 +294,7 @@ export function useConverter(): UseConverterResult {
 
     const anchor = document.createElement('a');
     anchor.href = outputUrl;
-    anchor.download =
-      sanitizeFilename(outputFilename) || `output.${outputFormat}`;
+    anchor.download = getOutputFilename(outputFilename, outputFormat);
     anchor.click();
   }
 

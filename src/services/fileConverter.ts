@@ -3,10 +3,8 @@ import type { Category } from '../utils/constants';
 import { getMimeType } from '../utils/formats';
 import {
   buildFFmpegArgs,
-  changeExtension,
   getInputName,
   getOutputFilename,
-  sanitizeFilename,
 } from '../utils/helpers';
 
 export interface ConversionEngine {
@@ -37,15 +35,12 @@ export async function convertFile(
   }
 
   const inputName = getInputName(file);
-  // FFmpeg picks its muxer from the output filename, so the extension must
-  // match the selected output format even when the user typed a custom name.
-  const sanitized =
-    sanitizeFilename(
-      outputFilename ?? getOutputFilename(file.name, outputFormat),
-    ) || `output.${outputFormat}`;
-  const outputName = changeExtension(sanitized, outputFormat);
+  const outputName = getOutputFilename(
+    outputFilename ?? file.name,
+    outputFormat,
+  );
   const args = buildFFmpegArgs(inputName, outputFormat, category, options);
-  const data = await engine.convert(file, outputName, args);
+  const data = await engine.convert(file, `output.${outputFormat}`, args);
 
   return {
     blob: new Blob([data as BlobPart], { type: getMimeType(outputFormat) }),

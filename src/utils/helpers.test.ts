@@ -244,6 +244,11 @@ describe('helpers', () => {
   });
 
   describe('isValidOutputFormat', () => {
+    it('accepts GIF output for both image and video inputs', () => {
+      expect(isValidOutputFormat('video', 'gif')).toBe(true);
+      expect(isValidOutputFormat('image', 'gif')).toBe(true);
+    });
+
     it('returns true for matching category and format', () => {
       expect(isValidOutputFormat('video', 'mp4')).toBe(true);
     });
@@ -285,27 +290,65 @@ describe('helpers', () => {
   describe('buildFlattenFilterComplex', () => {
     it('builds a centered overlay for contain fit', () => {
       expect(buildFlattenFilterComplex(100, 100, 'contain', '#ffffff')).toBe(
-        'color=c=0xffffff:s=100x100[bg];[0:v]scale=100:100:force_original_aspect_ratio=decrease[img];[bg][img]overlay=(main_w-overlay_w)/2:(main_h-overlay_h)/2:format=auto[outv]',
+        'color=c=0xffffff:s=100x100[bg];[0:v]scale=100:100:force_original_aspect_ratio=decrease[img];[bg][img]overlay=(main_w-overlay_w)/2:(main_h-overlay_h)/2:format=auto:shortest=1[outv]',
       );
     });
 
     it('builds a top-left overlay for cover fit', () => {
       expect(buildFlattenFilterComplex(100, 100, 'cover', '#ffffff')).toBe(
-        'color=c=0xffffff:s=100x100[bg];[0:v]scale=100:100:force_original_aspect_ratio=increase,crop=100:100[img];[bg][img]overlay=0:0:format=auto[outv]',
+        'color=c=0xffffff:s=100x100[bg];[0:v]scale=100:100:force_original_aspect_ratio=increase,crop=100:100[img];[bg][img]overlay=0:0:format=auto:shortest=1[outv]',
       );
     });
 
     it('builds a top-left overlay for stretch and force fits', () => {
       expect(buildFlattenFilterComplex(100, 100, 'stretch', '#ffffff')).toBe(
-        'color=c=0xffffff:s=100x100[bg];[0:v]scale=100:100[img];[bg][img]overlay=0:0:format=auto[outv]',
+        'color=c=0xffffff:s=100x100[bg];[0:v]scale=100:100[img];[bg][img]overlay=0:0:format=auto:shortest=1[outv]',
       );
       expect(buildFlattenFilterComplex(100, 100, 'force', '#ffffff')).toBe(
-        'color=c=0xffffff:s=100x100[bg];[0:v]scale=100:100[img];[bg][img]overlay=0:0:format=auto[outv]',
+        'color=c=0xffffff:s=100x100[bg];[0:v]scale=100:100[img];[bg][img]overlay=0:0:format=auto:shortest=1[outv]',
       );
     });
   });
 
   describe('buildImageArgs', () => {
+    it.each([true, false])(
+      'caps ICO dimensions with transparency preservation %s',
+      (preserveTransparency) => {
+        const options = getDefaultOptions();
+        Object.assign(options.image, {
+          width: 640,
+          height: 400,
+          preserveTransparency,
+        });
+        const args = buildFFmpegArgs('input.png', 'ico', 'image', options);
+        expect(args.join(' ')).toContain('min(iw,256)');
+        expect(args.slice(-4)).toEqual(['-c:v', 'png', '-pix_fmt', 'rgba']);
+      },
+    );
+
+    it('passes the selected WebP quality directly to its encoder', () => {
+      const args = buildFFmpegArgs(
+        'input.png',
+        'webp',
+        'image',
+        getDefaultOptions(),
+      );
+      expect(args.slice(-2)).toEqual(['-quality', '80']);
+    });
+
+    it.each(['png', 'jpg', 'bmp', 'ico'])(
+      'exports one frame when converting animated GIF to %s',
+      (format) => {
+        const args = buildFFmpegArgs(
+          'input.gif',
+          format,
+          'image',
+          getDefaultOptions(),
+        );
+        expect(args[args.indexOf('-frames:v') + 1]).toBe('1');
+      },
+    );
+
     it('skips filter and quality for png without dimensions', () => {
       const defaults = getDefaultOptions();
       const options = {
@@ -313,7 +356,7 @@ describe('helpers', () => {
         image: { ...defaults.image, width: undefined, height: undefined },
       };
       const args = buildFFmpegArgs('input.png', 'png', 'image', options);
-      expect(args).toEqual(['-i', 'input.png']);
+      expect(args).toEqual(['-i', 'input.png', '-frames:v', '1']);
     });
 
     it('uses filter_complex to flatten transparency onto the background color', () => {
@@ -335,11 +378,9 @@ describe('helpers', () => {
         '-i',
         'input.jpg',
         '-filter_complex',
-        'color=c=0xffffff:s=100x100[bg];[0:v]scale=100:100:force_original_aspect_ratio=decrease[img];[bg][img]overlay=(main_w-overlay_w)/2:(main_h-overlay_h)/2:format=auto[outv]',
+        'color=c=0xffffff:s=100x100[bg];[0:v]scale=100:100:force_original_aspect_ratio=decrease[img];[bg][img]overlay=(main_w-overlay_w)/2:(main_h-overlay_h)/2:format=auto:shortest=1[outv]',
         '-map',
         '[outv]',
-        '-update',
-        '1',
         '-frames:v',
         '1',
         '-q:v',
@@ -390,7 +431,7 @@ describe('helpers', () => {
         video: { ...defaults.video, loop: false },
       };
       const args = buildFFmpegArgs('input.mp4', 'gif', 'video', options);
-      expect(args).not.toContain('-loop');
+      expect(args.slice(-2)).toEqual(['-loop', '-1']);
     });
   });
 

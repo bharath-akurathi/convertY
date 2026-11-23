@@ -119,6 +119,26 @@ describe('useBatchConverter', () => {
     vi.clearAllMocks();
   });
 
+  it('stops before the next queued file when the batch tool unmounts', async () => {
+    const user = userEvent.setup();
+    let finish!: () => void;
+    mockedConvertFile.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = () => {
+            resolve({ blob: new Blob(), filename: 'a.png' });
+          };
+        }),
+    );
+    const { unmount } = render(<TestComponent />);
+    await user.click(screen.getByRole('button', { name: 'Add files' }));
+    await user.click(screen.getByRole('button', { name: 'Run all' }));
+    unmount();
+    finish();
+    await Promise.resolve();
+    expect(mockedConvertFile).toHaveBeenCalledTimes(1);
+  });
+
   it('adds files with default formats and queues them', async () => {
     const user = userEvent.setup();
     render(<TestComponent />);

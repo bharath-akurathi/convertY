@@ -43,7 +43,7 @@ export function ArchiveTools() {
         downloadBlob(zip, 'archive.zip');
       } else {
         const extracted = await extractZip(files[0]);
-        setEntries(extracted);
+        setEntries(extracted.filter((entry) => !entry.name.endsWith('/')));
         setZipName(files[0].name);
       }
     } catch (err) {
@@ -54,12 +54,13 @@ export function ArchiveTools() {
   }
 
   return (
-    <div className="space-y-6 rounded-lg bg-white p-6 shadow-xs dark:bg-slate-800">
-      <h2 className="text-xl font-semibold">Archives</h2>
-      <p className="text-sm text-slate-600 dark:text-slate-400">
-        Create and extract ZIP archives entirely in your browser. ZIP only —
-        7z/TAR/RAR conversion is out of scope.
-      </p>
+    <div className="tool-surface">
+      <header>
+        <h2 className="tool-title">Archives</h2>
+        <p className="tool-summary">
+          Bundle files together or extract their contents. ZIP only.
+        </p>
+      </header>
 
       <fieldset>
         <legend className="text-sm font-medium text-slate-700 dark:text-slate-200">
@@ -73,6 +74,7 @@ export function ArchiveTools() {
               name="archive-mode"
               onChange={() => {
                 setMode('create');
+                setZipName(null);
                 setFiles([]);
                 setEntries([]);
                 setError(null);
@@ -89,6 +91,7 @@ export function ArchiveTools() {
               name="archive-mode"
               onChange={() => {
                 setMode('extract');
+                setZipName(null);
                 setFiles([]);
                 setEntries([]);
                 setError(null);
@@ -104,7 +107,7 @@ export function ArchiveTools() {
       <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">
         {mode === 'create' ? 'Select files to zip' : 'Select a ZIP file'}
         <input
-          className="mt-1 block w-full text-sm text-slate-700 file:mr-4 file:cursor-pointer file:rounded-md file:border-0 file:bg-slate-800 file:px-4 file:py-2 file:font-medium file:text-white hover:file:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50 dark:text-slate-200 dark:file:bg-slate-200 dark:file:text-slate-900"
+          className="file-input"
           disabled={isBusy}
           multiple={mode === 'create'}
           onChange={handleFilesSelected}
@@ -129,7 +132,7 @@ export function ArchiveTools() {
       )}
 
       <button
-        className="w-full cursor-pointer rounded-md bg-slate-800 px-4 py-2 font-medium text-white shadow-xs transition-colors hover:bg-slate-700 focus:ring-2 focus:ring-slate-500 focus:outline-hidden disabled:cursor-not-allowed disabled:opacity-50 dark:bg-slate-200 dark:text-slate-900 dark:hover:bg-slate-100"
+        className="primary-action w-full"
         disabled={isBusy || files.length === 0}
         onClick={() => {
           void handleRun();
@@ -146,6 +149,10 @@ export function ArchiveTools() {
         >
           {error}
         </p>
+      )}
+
+      {zipName && entries.length === 0 && (
+        <p role="status">This archive contains no files.</p>
       )}
 
       {entries.length > 0 && (

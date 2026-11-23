@@ -40,7 +40,7 @@ function ImageSection({
         <label className="block flex-1 text-sm font-medium text-slate-700 dark:text-slate-200">
           Width (px)
           <input
-            className="mt-1 block w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-slate-900 shadow-xs focus:border-slate-500 focus:outline-hidden disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+            className="field-control"
             disabled={disabled}
             min={1}
             onChange={(event) => {
@@ -69,7 +69,7 @@ function ImageSection({
         <label className="block flex-1 text-sm font-medium text-slate-700 dark:text-slate-200">
           Height (px)
           <input
-            className="mt-1 block w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-slate-900 shadow-xs focus:border-slate-500 focus:outline-hidden disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+            className="field-control"
             disabled={disabled}
             min={1}
             onChange={(event) => {
@@ -113,7 +113,7 @@ function ImageSection({
       <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">
         Fit
         <select
-          className="mt-1 block w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-slate-900 shadow-xs focus:border-slate-500 focus:outline-hidden disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+          className="field-control"
           disabled={disabled}
           onChange={(event) => {
             onChange({ fit: event.target.value as ImageOptions['fit'] });
@@ -193,7 +193,7 @@ function VideoSection({
         <label className="block flex-1 text-sm font-medium text-slate-700 dark:text-slate-200">
           Width (px)
           <input
-            className="mt-1 block w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-slate-900 shadow-xs focus:border-slate-500 focus:outline-hidden disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+            className="field-control"
             disabled={disabled}
             min={1}
             onChange={(event) => {
@@ -222,7 +222,7 @@ function VideoSection({
         <label className="block flex-1 text-sm font-medium text-slate-700 dark:text-slate-200">
           Height (px)
           <input
-            className="mt-1 block w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-slate-900 shadow-xs focus:border-slate-500 focus:outline-hidden disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+            className="field-control"
             disabled={disabled}
             min={1}
             onChange={(event) => {
@@ -266,7 +266,7 @@ function VideoSection({
       <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">
         Fit
         <select
-          className="mt-1 block w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-slate-900 shadow-xs focus:border-slate-500 focus:outline-hidden disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+          className="field-control"
           disabled={disabled}
           onChange={(event) => {
             onChange({ fit: event.target.value as VideoOptions['fit'] });
@@ -283,7 +283,7 @@ function VideoSection({
       <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">
         Frame rate (fps)
         <input
-          className="mt-1 block w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-slate-900 shadow-xs focus:border-slate-500 focus:outline-hidden disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+          className="field-control"
           disabled={disabled}
           min={1}
           onChange={(event) => {
@@ -329,7 +329,7 @@ function VideoSection({
         <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">
           Audio bitrate
           <select
-            className="mt-1 block w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-slate-900 shadow-xs focus:border-slate-500 focus:outline-hidden disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+            className="field-control"
             disabled={disabled}
             onChange={(event) => {
               onChange({
@@ -380,7 +380,7 @@ function AudioSection({
       <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">
         Bitrate
         <select
-          className="mt-1 block w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-slate-900 shadow-xs focus:border-slate-500 focus:outline-hidden disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+          className="field-control"
           disabled={disabled}
           onChange={(event) => {
             onChange({ bitrate: event.target.value || undefined });
@@ -399,7 +399,7 @@ function AudioSection({
       <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">
         Sample rate (Hz)
         <select
-          className="mt-1 block w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-slate-900 shadow-xs focus:border-slate-500 focus:outline-hidden disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+          className="field-control"
           disabled={disabled}
           onChange={(event) => {
             onChange({ sampleRate: parseOptionalInt(event.target.value) });
@@ -416,7 +416,7 @@ function AudioSection({
       <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">
         Channels
         <select
-          className="mt-1 block w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-slate-900 shadow-xs focus:border-slate-500 focus:outline-hidden disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+          className="field-control"
           disabled={disabled}
           onChange={(event) => {
             onChange({

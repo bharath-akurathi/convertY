@@ -1,13 +1,14 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { ArrowRightLeft, Crop, Shrink } from 'lucide-react';
 
 import type { ToolTab } from './ToolTabs';
 import { ToolTabs } from './ToolTabs';
 
 const tabs: ToolTab[] = [
-  { id: 'convert', label: 'Convert' },
-  { id: 'compress', label: 'Compress' },
-  { id: 'edit', label: 'Edit' },
+  { id: 'convert', label: 'Convert', icon: ArrowRightLeft },
+  { id: 'compress', label: 'Compress', icon: Shrink },
+  { id: 'edit', label: 'Edit', icon: Crop },
 ];
 
 describe('ToolTabs', () => {

@@ -1,4 +1,4 @@
-import { Unzip, UnzipInflate, UnzipPassThrough, zipSync } from 'fflate';
+import { Unzip, UnzipInflate, UnzipPassThrough, Zip, ZipDeflate } from 'fflate';
 
 export interface ZipEntry {
   name: string;
@@ -68,16 +68,21 @@ export function getUniqueZipEntryName(name: string, used: Set<string>): string {
 }
 
 export async function createZip(files: File[]): Promise<Blob> {
-  const entries: Record<string, Uint8Array> = {};
+  const chunks: BlobPart[] = [];
+  const zip = new Zip((error, chunk) => {
+    if (error) throw error;
+    chunks.push(chunk);
+  });
   const used = new Set<string>();
 
   for (const file of files) {
-    const buffer = await file.arrayBuffer();
-    const name = getUniqueZipEntryName(file.name, used);
-    entries[name] = new Uint8Array(buffer);
+    const entry = new ZipDeflate(getUniqueZipEntryName(file.name, used));
+    zip.add(entry);
+    entry.push(new Uint8Array(await file.arrayBuffer()), true);
   }
 
-  return new Blob([zipSync(entries)], { type: 'application/zip' });
+  zip.end();
+  return new Blob(chunks, { type: 'application/zip' });
 }
 
 export function assertZipEntryLimits(
@@ -370,12 +375,9 @@ export async function extractZip(
   const entries = await unzipWithLimits(data, limits);
 
   // Final check on the extracted data, as defense in depth.
-  const record: Record<string, Uint8Array> = {};
-
-  for (const entry of entries) {
-    record[entry.name] = entry.data;
-  }
-
+  const record = Object.fromEntries(
+    entries.map((entry) => [entry.name, entry.data]),
+  );
   assertZipEntryLimits(record, limits);
 
   return entries;

@@ -1,3 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
-  <text y=".9em" font-size="90">📁</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
+  <rect x="1" y="1" width="46" height="46" rx="13" fill="#20583e"/>
+  <path d="m10 29 14 7 14-7M10 23l14 7 14-7" fill="none" stroke="#c7e4ac" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="m10 17 14-7 14 7-14 7z" fill="#e4f2cf"/>
 </svg>

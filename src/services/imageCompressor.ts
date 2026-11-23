@@ -107,12 +107,17 @@ function decodeToImageData(
   canvas.width = width;
   canvas.height = height;
 
-  const context = get2dContext(canvas);
-  context.drawImage(bitmap, 0, 0, width, height);
-  const imageData = context.getImageData(0, 0, width, height);
-  bitmap.close();
-
-  return { imageData, width, height };
+  try {
+    const context = get2dContext(canvas);
+    context.drawImage(bitmap, 0, 0, width, height);
+    return {
+      imageData: context.getImageData(0, 0, width, height),
+      width,
+      height,
+    };
+  } finally {
+    bitmap.close();
+  }
 }
 
 /** Scales decoded image data by a factor between 0 and 1 via canvas. */
@@ -166,38 +171,6 @@ export async function compressImage(
   };
 }
 
-async function searchQualityForTarget(
-  imageData: ImageData,
-  format: CompressorFormat,
-  targetBytes: number,
-  width: number,
-  height: number,
-): Promise<CompressedImage | null> {
-  let low = 1;
-  let high = 100;
-  let best: CompressedImage | null = null;
-
-  for (let attempt = 0; attempt < 7; attempt += 1) {
-    const quality = Math.floor((low + high) / 2);
-    const data = await encodeImageData(imageData, format, quality);
-    const blob = new Blob([data], { type: getCompressorMimeType(format) });
-    const result: CompressedImage = { blob, width, height, format, quality };
-
-    if (blob.size <= targetBytes) {
-      best = result;
-      low = quality + 1;
-    } else {
-      high = quality - 1;
-    }
-
-    if (low > high) {
-      break;
-    }
-  }
-
-  return best;
-}
-
 /** Dimension scales tried (largest first) when quality alone cannot hit the target. */
 const TARGET_SIZE_SCALES = [0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2, 0.1];
 
@@ -209,59 +182,49 @@ export async function compressToTargetSize(
   maxHeight?: number,
 ): Promise<TargetSizeResult> {
   const bitmap = await createImageBitmap(file);
-  const { imageData, width, height } = decodeToImageData(
-    bitmap,
-    maxWidth,
-    maxHeight,
-  );
+  const { imageData } = decodeToImageData(bitmap, maxWidth, maxHeight);
 
-  // Quality tuning works for JPEG/WebP/AVIF, but PNG encoding ignores the
-  // quality argument, so for PNG go straight to dimension reduction.
-  if (format !== 'png') {
-    const best = await searchQualityForTarget(
-      imageData,
+  async function encode(
+    pixels: ImageData,
+    quality: number,
+  ): Promise<CompressedImage> {
+    const data = await encodeImageData(pixels, format, quality);
+    return {
+      blob: new Blob([data], { type: getCompressorMimeType(format) }),
+      width: pixels.width,
+      height: pixels.height,
       format,
-      targetBytes,
-      width,
-      height,
-    );
-
-    if (best) {
-      return { ...best, targetMet: true };
-    }
+      quality,
+    };
   }
 
-  // Quality alone cannot reach the target (or is meaningless for PNG):
-  // shrink dimensions step by step at the lowest quality and keep the
-  // smallest output we produce.
-  let smallest: CompressedImage | null = null;
+  let smallest = await encode(imageData, 1);
+  if (smallest.blob.size <= targetBytes) {
+    let best = smallest;
+    if (format !== 'png') {
+      let low = 2;
+      let high = 100;
+      while (low <= high) {
+        const quality = Math.floor((low + high) / 2);
+        const result = await encode(imageData, quality);
+        if (result.blob.size <= targetBytes) {
+          best = result;
+          low = quality + 1;
+        } else {
+          high = quality - 1;
+        }
+      }
+    }
+    return { ...best, targetMet: true };
+  }
 
   for (const scale of TARGET_SIZE_SCALES) {
     const scaled = scaleImageData(imageData, scale);
-    const data = await encodeImageData(scaled.imageData, format, 1);
-    const blob = new Blob([data], { type: getCompressorMimeType(format) });
-    const result: CompressedImage = {
-      blob,
-      width: scaled.width,
-      height: scaled.height,
-      format,
-      quality: 1,
-    };
-    smallest = result;
-
-    if (blob.size <= targetBytes) {
+    const result = await encode(scaled.imageData, 1);
+    if (result.blob.size <= targetBytes) {
       return { ...result, targetMet: true };
     }
+    if (result.blob.size < smallest.blob.size) smallest = result;
   }
-
-  // Nothing fit, even at the smallest scale: return the smallest output
-  // and report that the target could not be met.
-  /* v8 ignore start */
-  if (!smallest) {
-    // Unreachable: TARGET_SIZE_SCALES is non-empty, so the loop above
-    // always produces a result.
-    throw new Error('No compression result was produced');
-  }
-  /* v8 ignore stop */
   return { ...smallest, targetMet: false };
 }

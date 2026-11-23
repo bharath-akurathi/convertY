@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { createZip } from '../services/archiveTools';
 import { convertFile } from '../services/fileConverter';
@@ -46,6 +46,12 @@ export function useBatchConverter(): UseBatchConverterResult {
   const batchGenerationRef = useRef(0);
   const [items, setItems] = useState<BatchItem[]>([]);
   const [status, setStatus] = useState<BatchStatus>('idle');
+
+  useEffect(() => {
+    return () => {
+      batchGenerationRef.current += 1;
+    };
+  }, []);
 
   function addFiles(files: File[]): void {
     const newItems: BatchItem[] = files.map((file) => {

@@ -59,6 +59,7 @@ export function ImageEditor() {
   // unmounts so repeated use does not leak blob URLs or image memory.
   useEffect(() => {
     return () => {
+      fileGenerationRef.current += 1;
       revokeFileUrl(previewUrlRef.current);
       revokeFileUrl(resultUrlRef.current);
       bitmapRef.current?.close();
@@ -78,6 +79,11 @@ export function ImageEditor() {
     previewUrlRef.current = url;
     resultUrlRef.current = null;
 
+    bitmapRef.current?.close();
+    bitmapRef.current = null;
+    setBitmap(null);
+    setDragStart(null);
+    setCropDraft(null);
     setFile(selected);
     setPreviewUrl(url);
     setEdit(getDefaultEdit());
@@ -93,7 +99,6 @@ export function ImageEditor() {
         return;
       }
 
-      bitmapRef.current?.close();
       bitmapRef.current = image;
       setBitmap(image);
     } catch {
@@ -101,8 +106,6 @@ export function ImageEditor() {
         return;
       }
 
-      bitmapRef.current?.close();
-      bitmapRef.current = null;
       setError('Could not read this image file.');
       setBitmap(null);
     }
@@ -208,7 +211,9 @@ export function ImageEditor() {
     setError(null);
 
     try {
+      const generation = fileGenerationRef.current;
       const blob = await applyEdits(bitmap, edit);
+      if (fileGenerationRef.current !== generation) return;
       revokeFileUrl(resultUrlRef.current);
       const url = createFileUrl(blob);
       resultUrlRef.current = url;
@@ -240,14 +245,18 @@ export function ImageEditor() {
   const activeCrop = cropDraft ?? edit.crop;
 
   return (
-    <div className="space-y-6 rounded-lg bg-white p-6 shadow-xs dark:bg-slate-800">
-      <h2 className="text-xl font-semibold">Image editor</h2>
-      <p className="text-sm text-slate-600 dark:text-slate-400">
-        Crop, rotate, flip, and filter images in your browser. Drag on the
-        preview to draw a crop rectangle.
-      </p>
+    <div className="tool-surface">
+      <header>
+        <h2 className="tool-title">Image editor</h2>
+        <p className="tool-summary">
+          Crop, rotate, flip, and filter images in your browser. Drag on the
+          preview to draw a crop rectangle.
+        </p>
+      </header>
 
       <FileDropzone
+        compact={Boolean(file)}
+        hint="Choose an image from your device"
         disabled={isBusy}
         onFileSelect={(selected) => {
           void handleFileSelect(selected);
@@ -301,7 +310,7 @@ export function ImageEditor() {
               Crop: {Math.round(edit.crop.x)}, {Math.round(edit.crop.y)},{' '}
               {Math.round(edit.crop.width)}×{Math.round(edit.crop.height)}
               <button
-                className="ml-2 cursor-pointer text-blue-600 underline hover:text-blue-500 dark:text-blue-400"
+                className="text-pine-700 dark:text-pine-300 ml-2 cursor-pointer underline hover:text-blue-500"
                 onClick={() => {
                   setEdit((previous) => ({ ...previous, crop: null }));
                 }}
@@ -460,7 +469,7 @@ export function ImageEditor() {
             </label>
 
             <button
-              className="cursor-pointer rounded-md bg-slate-800 px-4 py-2 font-medium text-white shadow-xs transition-colors hover:bg-slate-700 focus:ring-2 focus:ring-slate-500 focus:outline-hidden disabled:cursor-not-allowed disabled:opacity-50 dark:bg-slate-200 dark:text-slate-900 dark:hover:bg-slate-100"
+              className="primary-action"
               disabled={isBusy}
               onClick={() => {
                 void handleExport();

@@ -491,6 +491,16 @@ describe('useConverter hook', () => {
     });
   });
 
+  it('reports a failed engine load after one attempt', async () => {
+    const user = userEvent.setup();
+    mockFFmpeg.load.mockRejectedValue(new Error('offline'));
+    render(<TestComponent />);
+    await user.click(screen.getByRole('button', { name: /set video/i }));
+    await user.click(screen.getByRole('button', { name: /convert/i }));
+    expect(await screen.findByText('offline')).toBeInTheDocument();
+    expect(mockFFmpeg.load).toHaveBeenCalledTimes(1);
+  });
+
   it('downloads the converted file', async () => {
     const user = userEvent.setup();
     const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click');
@@ -505,7 +515,14 @@ describe('useConverter hook', () => {
     });
 
     await user.click(screen.getByRole('button', { name: /download/i }));
-    expect(clickSpy).toHaveBeenCalled();
+    expect(clickSpy.mock.contexts[0]).toHaveProperty('download', 'my_clip.mp4');
+    await user.clear(screen.getByLabelText('Output filename'));
+    await user.type(screen.getByLabelText('Output filename'), 'new name.wav');
+    await user.click(screen.getByRole('button', { name: /download/i }));
+    expect(clickSpy.mock.contexts[1]).toHaveProperty(
+      'download',
+      'new_name.mp4',
+    );
 
     clickSpy.mockRestore();
   });

@@ -193,6 +193,8 @@ describe('pdfTools (pdf-lib, jsPDF, docx, mammoth)', () => {
 });
 
 describe('pdfTools (pdfjs-dist)', () => {
+  const destroy = vi.fn(() => Promise.resolve());
+
   function mockPdfDocument() {
     const page = {
       getViewport: () => ({ width: 100, height: 200 }),
@@ -211,6 +213,7 @@ describe('pdfTools (pdfjs-dist)', () => {
   beforeEach(() => {
     mockedGetDocument.mockReturnValue({
       promise: Promise.resolve(mockPdfDocument()),
+      destroy,
     } as unknown as ReturnType<typeof getDocument>);
   });
 
@@ -222,12 +225,13 @@ describe('pdfTools (pdfjs-dist)', () => {
     const file = await makePdfFile(2);
     expect(await getPdfPageCount(file)).toBe(2);
     expect(GlobalWorkerOptions.workerSrc).toBeTruthy();
-    expect(mockedGetDocument).toHaveBeenCalled();
+    expect(destroy).toHaveBeenCalledOnce();
   });
 
   it('extracts text from every page', async () => {
     const file = await makePdfFile(2);
     const text = await pdfToText(file);
+    expect(destroy).toHaveBeenCalledOnce();
     expect(text).toBe('Hello world \nHello world ');
   });
 
@@ -252,6 +256,7 @@ describe('pdfTools (pdfjs-dist)', () => {
     try {
       const file = await makePdfFile(2);
       const images = await pdfToImages(file, 'png', 1);
+      expect(destroy).toHaveBeenCalledOnce();
       expect(images).toHaveLength(2);
       expect(images[0].type).toBe('image/png');
     } finally {
@@ -306,6 +311,7 @@ describe('pdfTools (pdfjs-dist)', () => {
       await expect(pdfToImages(file)).rejects.toThrow(
         'Canvas 2D context is not available',
       );
+      expect(destroy).toHaveBeenCalledOnce();
     } finally {
       createElement.mockRestore();
     }

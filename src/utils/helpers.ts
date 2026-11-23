@@ -6,7 +6,12 @@ import type {
 } from '../types/converter';
 import type { Category } from './constants';
 import { LARGE_FILE_THRESHOLD_BYTES } from './constants';
-import { getFileExtension, getOutputFormat } from './formats';
+import {
+  getCategory,
+  getFileExtension,
+  getOutputFormats,
+  isSvg,
+} from './formats';
 
 export function isLargeFile(file: File): boolean {
   return file.size > LARGE_FILE_THRESHOLD_BYTES;
@@ -15,15 +20,15 @@ export function isLargeFile(file: File): boolean {
 export function getMediaDimensions(
   file: File,
 ): Promise<{ height: number; width: number } | null> {
-  if (!file.type.startsWith('image/') && !file.type.startsWith('video/')) {
+  const category = getCategory(file);
+  if (category !== 'image' && category !== 'video') {
     return Promise.resolve(null);
   }
 
   /* v8 ignore start */
-  const isImage = file.type.startsWith('image/');
+  const isImage = category === 'image';
   const url = URL.createObjectURL(file);
   const element = isImage ? new Image() : document.createElement('video');
-  element.src = url;
 
   return new Promise((resolve) => {
     const cleanup = () => {
@@ -50,6 +55,7 @@ export function getMediaDimensions(
       once: true,
     });
     element.addEventListener('error', handleError, { once: true });
+    element.src = url;
   });
   /* v8 ignore stop */
 }
@@ -151,7 +157,7 @@ export function buildFlattenFilterComplex(
       overlayPosition = '0:0';
   }
 
-  return `color=c=${bg}:s=${String(width)}x${String(height)}[bg];[0:v]${imageChain}[img];[bg][img]overlay=${overlayPosition}:format=auto[outv]`;
+  return `color=c=${bg}:s=${String(width)}x${String(height)}[bg];[0:v]${imageChain}[img];[bg][img]overlay=${overlayPosition}:format=auto:shortest=1[outv]`;
 }
 
 export function mapImageQuality(quality: number): number {
@@ -189,6 +195,13 @@ export function buildImageArgs(
 ): string[] {
   const args: string[] = [];
 
+  // ICO entries are limited to 256 pixels per axis. Apply this cap after
+  // the requested fit, preserving aspect ratio for smaller images too.
+  const iconScale =
+    outputFormat === 'ico'
+      ? "scale='min(iw,256)':'min(ih,256)':force_original_aspect_ratio=decrease"
+      : '';
+
   const canFlatten =
     !options.preserveTransparency &&
     Boolean(options.width) &&
@@ -202,13 +215,9 @@ export function buildImageArgs(
         options.height,
         options.fit,
         options.background,
-      ),
+      ) + (iconScale ? `;[outv]${iconScale}[icon]` : ''),
       '-map',
-      '[outv]',
-      '-update',
-      '1',
-      '-frames:v',
-      '1',
+      iconScale ? '[icon]' : '[outv]',
     );
   } else {
     const filter = buildScaleFilter(
@@ -218,12 +227,22 @@ export function buildImageArgs(
       options.background,
     );
 
-    if (filter) {
-      args.push('-vf', filter);
+    const filters = [filter, iconScale].filter(Boolean).join(',');
+    if (filters) {
+      args.push('-vf', filters);
     }
   }
 
-  if (['jpg', 'jpeg', 'webp', 'gif'].includes(outputFormat)) {
+  if (outputFormat !== 'gif' && outputFormat !== 'webp') {
+    args.push('-frames:v', '1');
+  }
+  if (outputFormat === 'ico') {
+    args.push('-c:v', 'png', '-pix_fmt', 'rgba');
+  }
+  if (outputFormat === 'webp') {
+    args.push('-quality', String(options.quality));
+  }
+  if (['jpg', 'jpeg'].includes(outputFormat)) {
     args.push('-q:v', String(mapImageQuality(options.quality)));
   }
 
@@ -247,9 +266,7 @@ export function buildVideoArgs(
   }
 
   if (outputFormat === 'gif') {
-    if (options.loop) {
-      args.push('-loop', '0');
-    }
+    args.push('-loop', options.loop ? '0' : '-1');
   } else {
     if (outputFormat === 'webm') {
       args.push('-c:v', 'libvpx', '-deadline', 'good', '-cpu-used', '5');
@@ -319,11 +336,13 @@ export function isValidOutputFormat(
   category: Category,
   outputFormat: string,
 ): boolean {
-  const format = getOutputFormat(outputFormat);
-  return format?.category === category;
+  return getOutputFormats(category).some(
+    (format) => format.value === outputFormat,
+  );
 }
 
 export function getInputName(file: File): string {
+  if (isSvg(file)) return 'input.png';
   const extension = getFileExtension(file.name) || 'bin';
   return `input.${extension}`;
 }

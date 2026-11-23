@@ -225,6 +225,25 @@ describe('archiveTools', () => {
     expect(new TextDecoder().decode(extracted[0].data)).toBe('hello');
   });
 
+  it('preserves ordinary files named like object properties', async () => {
+    const zip = await createZip([
+      new File(['contents'], '__proto__'),
+      new File(['another'], 'constructor'),
+    ]);
+    const entries = await extractZip(new File([zip], 'names.zip'));
+    expect(entries.map((entry) => entry.name)).toEqual([
+      '__proto__',
+      'constructor',
+    ]);
+    expect(new TextDecoder().decode(entries[0].data)).toBe('contents');
+  });
+
+  it('reports a ZIP entry name that exceeds the format limit', async () => {
+    await expect(
+      createZip([new File([], 'a'.repeat(65536))]),
+    ).rejects.toThrow();
+  });
+
   it('creates an empty ZIP when no files are given', async () => {
     const zip = await createZip([]);
     expect(zip.type).toBe('application/zip');
